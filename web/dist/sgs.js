@@ -40,7 +40,7 @@ var ENVIRONMENT_IS_SHELL = !ENVIRONMENT_IS_WEB && !ENVIRONMENT_IS_NODE && !ENVIR
 
 // --pre-jses are emitted after the Module integration code, so that they can
 // refer to Module (if they choose; they can also define Module)
-// include: C:\Users\Administrator\AppData\Local\Temp\tmpantc6339.js
+// include: C:\Users\xayah\AppData\Local\Temp\tmp9iq3qeq6.js
 
   if (!Module['expectedDataFileDownloads']) Module['expectedDataFileDownloads'] = 0;
   Module['expectedDataFileDownloads']++;
@@ -168,7 +168,7 @@ Module['FS_createPath']("/", "data", true, true);
 
   })();
 
-// end include: C:\Users\Administrator\AppData\Local\Temp\tmpantc6339.js
+// end include: C:\Users\xayah\AppData\Local\Temp\tmp9iq3qeq6.js
 
 
 var programArgs = [];
@@ -4125,6 +4125,7 @@ var UTF8Decoder = globalThis.TextDecoder && new TextDecoder();
 
 
 
+
   var FS_createPath = (...args) => FS.createPath(...args);
 
 
@@ -4187,8 +4188,10 @@ if (Module['printErr']) err = Module['printErr'];
 function js_log(s) { if (globalThis.sgsOnLog) globalThis.sgsOnLog(UTF8ToString(s)); }
 function js_state(s) { if (globalThis.sgsOnState) globalThis.sgsOnState(UTF8ToString(s)); }
 function js_ask(s) { if (globalThis.sgsOnAsk) globalThis.sgsOnAsk(UTF8ToString(s)); }
+function js_event(s) { if (globalThis.sgsOnEvent) globalThis.sgsOnEvent(UTF8ToString(s)); }
+function js_ask_closed(requestId) { if (globalThis.sgsOnAskClosed) globalThis.sgsOnAskClosed(requestId); }
 function js_done() { if (globalThis.sgsOnDone) globalThis.sgsOnDone(); }
-function js_answer_ready() { return (globalThis.sgsAnswer && globalThis.sgsAnswer.ready) ? 1 : 0; }
+function js_answer_ready(requestId) { return (globalThis.sgsAnswer && globalThis.sgsAnswer.ready && globalThis.sgsAnswer.requestId === requestId) ? 1 : 0; }
 function js_answer_option() { return globalThis.sgsAnswer ? (globalThis.sgsAnswer.option | 0) : -1; }
 function js_answer_cards(buf,len) { var s = (globalThis.sgsAnswer && globalThis.sgsAnswer.cards) ? globalThis.sgsAnswer.cards.join(",") : ""; stringToUTF8(s, buf, len); }
 function js_answer_targets(buf,len) { var s = (globalThis.sgsAnswer && globalThis.sgsAnswer.targets) ? globalThis.sgsAnswer.targets.join(",") : ""; stringToUTF8(s, buf, len); }
@@ -4314,11 +4317,15 @@ var wasmImports = {
   /** @export */
   js_ask,
   /** @export */
+  js_ask_closed,
+  /** @export */
   js_auto_play,
   /** @export */
   js_bagua_mode,
   /** @export */
   js_done,
+  /** @export */
+  js_event,
   /** @export */
   js_log,
   /** @export */

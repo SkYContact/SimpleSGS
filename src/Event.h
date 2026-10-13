@@ -28,7 +28,16 @@ enum class Event {
     Die,            // 阵亡
     Recover,        // 回复体力
     AskForCard,     // 需要打出某张牌时（八卦阵可提供替代）
+    CardResponded,  // 实体响应牌已支付（供展示层观察）
+    CardsMoved,     // 牌区更新完成（供展示层观察）
+    CardFinished,   // 一次使用结算完成
     Count
+};
+
+struct CardMove {
+    int cardId = -1;
+    int fromOwner = -1;
+    Area fromArea = Area::None;
 };
 
 struct TriggerParams {
@@ -51,6 +60,8 @@ struct TriggerParams {
     bool forcedHit = false;           // SlashDodged: 强制命中
     bool effectCancelled = false;     // CardEffect: 该目标效果被取消
     int number = 0;                   // 通用数值
+    std::vector<CardMove> moves;      // CardsMoved: 实体牌及移动前的位置
+    Area toArea = Area::None;
 };
 
 // 触发器：名字 + 监听的事件 + 优先级（越小越先）+ 拥有者（-1 = 全局）

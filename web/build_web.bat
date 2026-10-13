@@ -5,6 +5,7 @@ rem  需要先装好 emsdk（见 install_emsdk.ps1），默认装在 C:\emsdk
 rem ===========================================================================
 setlocal
 set EMSDK_QUIET=1
+if not defined EMSDK if exist "%~dp0..\build\emsdk\emsdk_env.bat" set "EMSDK=%~dp0..\build\emsdk"
 if not defined EMSDK set EMSDK=C:\emsdk
 
 rem PATH 里的 python 可能是 Microsoft Store 的假壳（跑起来 exit 9009），
