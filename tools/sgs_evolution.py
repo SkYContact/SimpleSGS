@@ -125,10 +125,11 @@ def farm_leg(engine, model_a, model1, games, seed0, chains=None, banks=2):
            "FARM_FIXED_BATCH": "256",
            "FARM_CUDA_DIR": "C:/Users/41601/Miniconda3/envs/q35/Lib/site-packages/torch/lib"}
     r = None
-    for attempt in range(3):   # 框架间歇竞态护栏（约每 12~30 腿一次 0xC0000005）
+    for attempt in range(5):   # 瞬态崩溃护栏（实测偶发 0xC0000005，重试即过）
         r = subprocess.run(args, capture_output=True, text=True, env=env)
         if r.returncode == 0:
             break
+        time.sleep(2.0 * (attempt + 1))
     if r.returncode != 0:
         raise RuntimeError(f"farm 腿三次崩溃 rc={r.returncode}")
     for line in r.stdout.splitlines():
@@ -186,7 +187,7 @@ def main():
         gen = st["gen"]
         champ_sd = torch.load(os.path.join(args.work, "champ.pt"),
                               map_location="cpu", weights_only=False)["state"]
-        print(f"[resume] gen{gen} champ={st['champ']}")
+        print(f"[resume] gen{gen}")
 
     champ_path = os.path.join(args.work, "champ.onnx")
     export_onnx_fast(champ_sd, config, champ_path, tmp)
