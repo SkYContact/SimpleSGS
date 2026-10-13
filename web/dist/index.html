@@ -1,110 +1,96 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>三国杀 1v1 · C++ → WebAssembly</title>
-<meta name="description" content="三国杀 1v1 精简引擎：C++17 规则内核（无武将 / 标准版 107 张牌），用 Emscripten 编成 WebAssembly，在浏览器里跑真实结算。">
-<meta name="theme-color" content="#12362a">
-<meta property="og:title" content="三国杀 1v1 · C++ → WebAssembly">
-<meta property="og:description" content="C++17 写的三国杀规则内核，Emscripten 编成 wasm，浏览器里直接玩。">
-<meta property="og:type" content="website">
-<link rel="stylesheet" href="style.css?v=2">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#171b1c">
+  <meta name="description" content="三国杀 1v1：在临江牌桌上与 AI 对弈。C++ 规则内核，无武将技能。">
+  <meta property="og:title" content="三国杀 · 1v1">
+  <meta property="og:description" content="浏览器内运行的三国杀精简引擎。">
+  <title>三国杀 · 1v1</title>
+  <link rel="preload" href="assets/table.webp" as="image">
+  <link rel="stylesheet" href="style.css">
+  <script src="sgs.js" defer></script>
+  <script src="cards.js" defer></script>
+  <script src="interaction.js" defer></script>
+  <script src="motion.js" defer></script>
+  <script src="app.js" defer></script>
 </head>
 <body>
-
-<div class="app">
-  <header class="topbar">
-    <div class="brand">
-      <span class="logo">杀</span>
-      <div>
-        <h1>三国杀 1v1</h1>
-        <p>无武将 · 标准版牌堆 · C++ 编译成 WebAssembly</p>
-      </div>
-    </div>
-    <div class="status">
-      <div class="pill" id="turnInfo">第 0 回合</div>
-      <div class="pill" id="deckInfo">牌堆 —</div>
-      <div class="pill" id="whoInfo">—</div>
-    </div>
-    <div class="controls">
-      <label class="speed">
-        速度
-        <input id="speed" type="range" min="0" max="1200" step="100" value="260">
-        <span id="speedVal">260ms</span>
-      </label>
-      <div class="settings-wrap">
-        <button id="settingsBtn" class="btn ghost" title="对局中也能改">⚙ 设置</button>
-        <div class="settings-panel" id="settingsPanel">
-          <h4>设置</h4>
-          <label class="setting-row">
-            <span>【八卦阵】发动</span>
-            <select id="baguaSelect">
-              <option value="1" selected>每次询问我是否发动（正式规则）</option>
-              <option value="0">自动（没手牌【闪】才判定）</option>
-              <option value="2">关闭（只打手牌【闪】）</option>
-            </select>
-          </label>
-          <p class="setting-hint">
-            改动即时生效（下一次需要判定时就用新设置）。<br>
-            询问档的流程：先问是否发动 → <b>判定红色＝视为打出【闪】</b>（不再问手牌闪）；
-            判定失败才问你是否打出手牌【闪】。
-          </p>
-        </div>
-      </div>
-      <button id="restart" class="btn ghost" disabled>重新开始</button>
-    </div>
-  </header>
-
-  <main>
-    <section class="table">
-      <div class="seat" id="foeSide"></div>
-      <div class="versus"><span>VS</span></div>
-      <div class="seat" id="meSide"></div>
-      <div class="legend">
-        牌名后面的标记：
-        <b>+1马</b>（防守马，别人算你更远）·
-        <b>-1马</b>（进攻马，你算别人更近）·
-        <b>射程N</b>（武器的攻击范围）　|　
-        距离 = 座位距离 + 对方防守马 − 你的进攻马
+  <main id="game" class="game is-lobby">
+    <div class="scene" aria-hidden="true"></div>
+    <button class="menu-trigger quiet" id="menuButton" aria-haspopup="dialog">菜单</button>
+    <section class="lobby" id="lobby" aria-labelledby="gameTitle">
+      <div class="lobby-content">
+        <h1 id="gameTitle">三国杀<span>双人对弈</span></h1>
+        <p class="lobby-description">标准牌局 · 无武将技能</p>
+        <fieldset class="seat-choice"><legend>选择座位</legend>
+          <label><input type="radio" name="seat" value="0" checked><span>先手</span></label>
+          <label><input type="radio" name="seat" value="1"><span>后手</span></label>
+        </fieldset>
+        <button class="primary start-button" id="startButton" disabled>开始对局</button>
+        <button class="quiet spectate-button" id="spectateButton" disabled>观看 AI 对弈</button>
+        <p class="load-state" id="loadState" role="status">正在准备牌桌…</p>
+        <button class="quiet" id="retryLoad" hidden>重新加载</button>
       </div>
     </section>
-
-    <aside class="side-panel">
-      <div class="panel-head">
-        <span>对局记录</span>
-        <button id="clearLog" class="btn tiny">清空</button>
+    <section class="board" id="board" aria-label="对局牌桌" hidden>
+      <aside class="battle-log" id="battleLog" aria-label="对局战报">
+        <button class="log-toggle" id="logToggle" aria-expanded="false" aria-controls="battleLogLines">战报<span id="logToggleHint">展开</span></button>
+        <div class="battle-log-lines" id="battleLogLines" tabindex="0" role="region" aria-label="战报记录，可向上滚动查看历史"></div>
+        <button class="log-latest" id="logLatest" hidden>回到最新</button>
+      </aside>
+      <section class="seat opponent" id="opponentSeat" aria-label="对手"></section>
+      <div class="table-center">
+        <div class="played-cards" id="playedCards" aria-label="最近的出牌"></div>
+        <p class="event-caption" id="eventCaption" aria-live="polite"></p>
       </div>
-      <div id="log" class="log"></div>
-    </aside>
+      <div class="piles" aria-label="牌堆">
+        <div class="pile"><div class="card-back deck-back" aria-hidden="true"></div><span>牌堆 <b id="deckCount">0</b></span></div>
+        <button class="pile discard-pile" id="discardButton" aria-label="查看战报"><span class="discard-top" id="discardTop" aria-hidden="true"></span><span>弃牌 <b id="discardCount">0</b></span></button>
+      </div>
+      <section class="seat self" id="selfSeat" aria-label="我的座位"></section>
+      <section class="decision" id="decision" aria-label="当前操作">
+        <div class="decision-copy"><p id="prompt" aria-live="polite"></p><span id="selectionCount"></span></div>
+        <div class="decision-buttons">
+          <button class="primary" id="confirmButton" disabled>确认</button>
+          <button class="quiet" id="cancelButton" hidden>不响应</button>
+          <button class="quiet" id="takeControl" hidden>接管对局</button>
+        </div>
+        <div class="extra-options" id="extraOptions"></div>
+      </section>
+      <div class="choice-panel" id="choicePanel" hidden>
+        <div class="choice-heading" id="choiceHeading"></div><div class="choice-cards" id="choiceCards"></div>
+      </div>
+      <section class="hand-area" aria-label="手牌">
+        <div class="hand" id="hand"></div>
+        <div class="hand-footer">
+          <div class="hand-detail" id="handDetail" hidden><span id="handDetailText"></span></div>
+          <nav class="hand-pages" id="handPages" aria-label="手牌翻页" hidden><button id="handPrev" aria-label="上一组手牌">‹</button><span id="handPageNumber"></span><button id="handNext" aria-label="下一组手牌">›</button></nav>
+        </div>
+      </section>
+    </section>
+    <div class="motion-layer" id="motionLayer" aria-hidden="true"></div>
+    <div class="sr-only" id="announcement" role="status" aria-live="polite"></div>
   </main>
-
-  <footer class="actionbar" id="actionBar">
-    <div class="waiting" id="waiting">选择一种开局方式…</div>
-  </footer>
-</div>
-
-<!-- 开局遮罩 -->
-<div class="cover" id="cover">
-  <div class="cover-card">
-    <h2>三国杀 1v1</h2>
-    <p class="sub">C++ 规则内核 → Emscripten → WebAssembly，在浏览器里跑真实结算</p>
-    <div class="cover-actions">
-      <button class="btn primary big" data-start="0">人机对战 · 你执先手</button>
-      <button class="btn big" data-start="1">人机对战 · 你执后手</button>
-      <button class="btn big" data-start="-1">AI 观战（我只看）</button>
-    </div>
-    <div class="cover-meta">
-      <label>随机种子 <input id="seedInput" type="number" min="1" max="2147483646" value="1"></label>
-      <button class="btn tiny" id="reseed" title="换一个随机种子">🎲 换一个</button>
-      <span class="hint">刷新/重开都会换新种子；同一种子 = 同样的牌堆顺序</span>
-    </div>
-
-    <p class="cover-foot" id="loadState">正在加载 wasm…</p>
-  </div>
-</div>
-
-<script src="sgs.js"></script>
-<script src="app.js?v=2"></script>
+  <dialog id="menuDialog" class="panel-dialog" aria-labelledby="menuTitle">
+    <div class="dialog-heading"><h2 id="menuTitle">菜单</h2><button class="quiet" data-close>关闭</button></div>
+    <div class="menu-links"><button class="secondary" id="historyButton">对局战报</button><button class="secondary" id="autoButton" hidden>托管给 AI</button><button class="secondary" id="returnLobbyButton" hidden>返回开始界面</button></div>
+    <label class="setting">八卦阵发动方式<select id="baguaSelect"><option value="1">每次询问</option><option value="0">没有闪时自动发动</option><option value="2">关闭</option></select></label>
+    <label class="setting">结算节奏<select id="speedSelect"><option value="550">从容</option><option value="320" selected>标准</option><option value="100">快速</option><option value="0">即时</option></select></label>
+    <label class="check-setting"><input type="checkbox" id="soundSetting">卡牌音效</label>
+    <label class="check-setting"><input type="checkbox" id="motionSetting">减少动态效果</label>
+    <details class="replay-settings"><summary>复现牌局</summary><label class="setting">随机种子<input id="seedInput" inputmode="numeric" type="number" min="1" max="2147483646" step="1" required></label><button class="quiet" id="reseed">换一个种子</button><p>相同种子与座位会使用相同的初始牌序。</p></details>
+    <p class="keyboard-help">Enter 确认选择 · Esc 清除选择或关闭面板</p>
+  </dialog>
+  <dialog id="historyDialog" class="panel-dialog history-dialog" aria-labelledby="historyTitle">
+    <div class="dialog-heading"><h2 id="historyTitle">对局战报</h2><button class="quiet" data-close>关闭</button></div>
+    <p id="historySummary" class="muted"></p><div class="history-lines" id="log"></div>
+  </dialog>
+  <dialog id="resultDialog" class="panel-dialog result-dialog" aria-labelledby="resultTitle">
+    <p id="resultEyebrow" class="muted">对局结束</p><h2 id="resultTitle">胜利</h2><p id="resultSummary"></p>
+    <div class="result-actions"><button class="primary" id="rematchButton">再来一局</button><button class="secondary" id="returnButton">返回</button><button class="quiet" id="resultHistory">查看战报</button><button class="quiet" data-close>查看牌桌</button></div>
+  </dialog>
+  <noscript>请启用 JavaScript 后进行对局。</noscript>
 </body>
 </html>

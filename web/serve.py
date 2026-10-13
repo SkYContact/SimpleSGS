@@ -14,13 +14,14 @@ import sys
 
 
 class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
+    # 交给静态文件处理器发送一次正确类型，避免叠加两个 Content-Type。
+    extensions_map = {**http.server.SimpleHTTPRequestHandler.extensions_map,
+                      '.wasm': 'application/wasm'}
+
     def end_headers(self):
         self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
         self.send_header('Pragma', 'no-cache')
         self.send_header('Expires', '0')
-        # WebAssembly 用到的类型
-        if self.path.endswith('.wasm'):
-            self.send_header('Content-Type', 'application/wasm')
         super().end_headers()
 
     def log_message(self, fmt, *args):      # 少刷屏

@@ -3,10 +3,11 @@
 //  用 Emscripten 把引擎（src/ 下的 C++ 内核）编进浏览器，把"玩家决策"这一步
 //  交给网页：C++ 侧用 emscripten_sleep（Asyncify）挂起，等页面点完再继续。
 //
-//  编译见 web/build_web.ps1 / build_web.sh
+//  编译见 web/build_web.bat
 // ============================================================================
 #include <emscripten.h>
 
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <vector>
@@ -31,11 +32,18 @@ EM_JS(void, js_state, (const char* s), {
 EM_JS(void, js_ask, (const char* s), {
     if (globalThis.sgsOnAsk) globalThis.sgsOnAsk(UTF8ToString(s));
 });
+EM_JS(void, js_event, (const char* s), {
+    if (globalThis.sgsOnEvent) globalThis.sgsOnEvent(UTF8ToString(s));
+});
+EM_JS(void, js_ask_closed, (int requestId), {
+    if (globalThis.sgsOnAskClosed) globalThis.sgsOnAskClosed(requestId);
+});
 EM_JS(void, js_done, (), {
     if (globalThis.sgsOnDone) globalThis.sgsOnDone();
 });
-EM_JS(int, js_answer_ready, (), {
-    return (globalThis.sgsAnswer && globalThis.sgsAnswer.ready) ? 1 : 0;
+EM_JS(int, js_answer_ready, (int requestId), {
+    return (globalThis.sgsAnswer && globalThis.sgsAnswer.ready &&
+            globalThis.sgsAnswer.requestId === requestId) ? 1 : 0;
 });
 EM_JS(int, js_answer_option, (), {
     return globalThis.sgsAnswer ? (globalThis.sgsAnswer.option | 0) : -1;
@@ -61,7 +69,7 @@ EM_JS(int, js_speed_ms, (), {
 EM_JS(int, js_auto_play, (), {
     return globalThis.sgsAutoPlay ? 1 : 0;
 });
-// 【八卦阵】发动方式：页面上"设置"里随时可改，写在这个全局变量里（0/1/2）
+// 【八卦阵】发动方式：页面菜单里随时可改，写在这个全局变量里（0/1/2）
 EM_JS(int, js_bagua_mode, (), {
     return globalThis.sgsBaguaMode | 0;
 });
@@ -69,6 +77,11 @@ EM_JS(int, js_bagua_mode, (), {
 namespace {
 
 std::unique_ptr<Room> g_room;
+int g_humanSeat = -1;
+int g_requestId = 0;  // 跨局递增，旧询问的迟到点击不会进入新局
+Phase g_phase = Phase::None;
+int g_useSequence = 0;
+std::vector<int> g_useGroups;
 
 // ---------------------------------------------------------------- JSON 工具
 std::string jsonEscape(const std::string& s) {
@@ -100,11 +113,26 @@ const char* kindName(AskKind k) {
     }
 }
 
+std::string protoJson(const CardProto& p, int id) {
+    return str("{\"id\":", id, ",\"name\":\"", jsonEscape(p.name),
+               "\",\"display\":\"", jsonEscape(p.display), "\",\"label\":\"",
+               jsonEscape(sgs::cardLabel(p)), "\",\"suit\":\"", suitSymbol(p.suit),
+               "\",\"rank\":\"", rankLabel(p.rank), "\",\"type\":\"", typeName(p.type),
+               "\",\"slotIndex\":", static_cast<int>(p.slot), ",\"range\":", p.range, "}");
+}
+
+std::string cardJson(Room& room, int id, bool hidden = false) {
+    if (hidden) return str("{\"id\":", id, ",\"hidden\":true,\"label\":\"未知手牌\",\"area\":\"手牌\"}");
+    std::string j = protoJson(room.card(id).proto, id);
+    j.pop_back();
+    return j + str(",\"area\":\"", areaName(room.areaOf(id)), "\"}");
+}
+
 std::string cardArray(Room& room, const std::vector<int>& ids) {
     std::string j = "[";
     for (size_t i = 0; i < ids.size(); ++i) {
         if (i) j += ",";
-        j += str("{\"id\":", ids[i], ",\"label\":\"", jsonEscape(room.cardLabel(ids[i])), "\"}");
+        j += cardJson(room, ids[i]);
     }
     j += "]";
     return j;
@@ -118,15 +146,17 @@ std::string playerJson(Room& room, int id) {
              ",\"handCount\":", p.handCount(), ",\"range\":", room.attackRange(p.id),
              ",\"distance\":", room.distance(id, room.other(id)),
              ",\"slashUsed\":", p.slashUsed, ",");
-    j += "\"hand\":" + cardArray(room, p.hand) + ",";
+    // 人机模式仅发送自己的手牌；观战公开双方手牌。
+    j += "\"hand\":" + (g_humanSeat < 0 || id == g_humanSeat ? cardArray(room, p.hand) : "[]") + ",";
 
     std::string eq = "[";
     for (int i = 0; i < 4; ++i) {
         int c = p.equip[i];
         if (c < 0) continue;
         if (eq.size() > 1) eq += ",";
-        eq += str("{\"slot\":\"", slotLabel(i), "\",\"label\":\"",
-                  jsonEscape(room.cardLabel(c)), "\"}");
+        std::string item = cardJson(room, c);
+        item.pop_back();
+        eq += item + str(",\"slot\":\"", slotLabel(i), "\"}");
     }
     eq += "]";
     j += "\"equip\":" + eq + ",";
@@ -137,10 +167,12 @@ std::string playerJson(Room& room, int id) {
 
 std::string stateJson(Room& room) {
     std::string j = "{";
-    j += str("\"turn\":", room.turnCount(), ",\"current\":", room.currentPlayer(),
+    j += str("\"protocol\":2,\"phase\":\"", phaseName(g_phase), "\",\"turn\":", room.turnCount(), ",\"current\":", room.currentPlayer(),
              ",\"over\":", room.gameOver() ? "true" : "false",
              ",\"winner\":", room.winner(), ",\"deck\":", room.drawPileSize(),
              ",\"discard\":", room.discardPileSize(), ",");
+    j += "\"discardTop\":" + (room.discardTop() >= 0 ? cardJson(room, room.discardTop()) : "null") + ",";
+    j += "\"revealed\":" + cardArray(room, room.revealedCards()) + ",";
     j += "\"players\":[" + playerJson(room, 0) + "," + playerJson(room, 1) + "]";
     j += "}";
     return j;
@@ -150,8 +182,9 @@ void pushState() {
     if (g_room) js_state(stateJson(*g_room).c_str());
 }
 
-std::string askJson(Room& room, const Ask& a) {
+std::string askJson(Room& room, const Ask& a, int requestId) {
     std::string j = "{";
+    j += str("\"requestId\":", requestId, ",\"allowCancel\":", a.allowCancel ? "true" : "false", ",");
     j += str("\"kind\":\"", kindName(a.kind), "\",");
     j += str("\"tag\":\"", jsonEscape(a.tag), "\",");
     j += str("\"prompt\":\"", jsonEscape(a.prompt), "\",");
@@ -165,9 +198,7 @@ std::string askJson(Room& room, const Ask& a) {
         int c = a.cards[i];
         bool hide = a.hidden && room.areaOf(c) == Area::Hand;
         if (i) j += ",";
-        j += str("{\"id\":", c, ",\"label\":\"",
-                 hide ? std::string("手牌(未知)") : jsonEscape(room.cardLabel(c)), "\",\"area\":\"",
-                 areaName(room.areaOf(c)), "\"}");
+        j += cardJson(room, c, hide);
     }
     j += "],\"options\":[";
     for (size_t i = 0; i < a.options.size(); ++i) {
@@ -178,6 +209,25 @@ std::string askJson(Room& room, const Ask& a) {
     for (size_t i = 0; i < a.optionCards.size(); ++i) {
         if (i) j += ",";
         j += str(a.optionCards[i]);
+    }
+    j += "],\"optionDetails\":[";
+    auto play = a.tag == "Play" ? buildPlayOptions(room, a.who) : std::vector<PlayOption>{};
+    for (size_t i = 0; i < a.options.size(); ++i) {
+        if (i) j += ",";
+        int c = i < a.optionCards.size() ? a.optionCards[i] : -1;
+        j += "{\"card\":";
+        if (c >= 0) j += cardJson(room, c);
+        else if (i < play.size()) j += protoJson(play[i].proto, -1);
+        else j += "null";
+        j += ",\"targets\":[";
+        if (i < play.size()) {
+            const auto& ts = play[i].needAskTargets ? play[i].targetCandidates : play[i].presetTargets;
+            for (size_t n = 0; n < ts.size(); ++n) {
+                if (n) j += ",";
+                j += str(ts[n]);
+            }
+        }
+        j += "]}";
     }
     j += "],\"targets\":[";
     for (size_t i = 0; i < a.targetCandidates.size(); ++i) {
@@ -211,11 +261,18 @@ public:
 
         // 顺序很重要：先清空答案槽，再发布询问。
         // 否则"发布 → 同步作答（自动化脚本/同帧点击）→ 被 clear 吃掉"会死等。
+        const int requestId = ++g_requestId;
         js_answer_clear();
-        js_ask(askJson(room, a).c_str());
+        js_ask(askJson(room, a, requestId).c_str());
 
         // 等页面把答案写进 globalThis.sgsAnswer；sleep 让出事件循环，页面才能刷新
-        while (js_answer_ready() == 0) {
+        while (js_answer_ready(requestId) == 0) {
+            // 托管当前询问也由 AI 正常作答，不能把空答案当成放弃。
+            if (js_auto_play() == 1) {
+                js_answer_clear();
+                js_ask_closed(requestId);
+                return ai_.ask(room, a);
+            }
             emscripten_sleep(30);
         }
 
@@ -229,6 +286,7 @@ public:
         js_answer_clear();
 
         // 合法性校验：只保留候选里的东西
+        js_ask_closed(requestId);
         std::vector<int> cards;
         for (int c : r.cards) {
             if (contains(a.cards, c) && !contains(cards, c)) cards.push_back(c);
@@ -269,6 +327,9 @@ extern "C" {
 //         baguaMode 0=自动 1=每次询问 2=关闭（【八卦阵】发动方式）
 EMSCRIPTEN_KEEPALIVE
 void sgs_start(int seed, int humanSeat, int hp, int baguaMode) {
+    g_humanSeat = humanSeat;
+    g_phase = Phase::None;
+    g_useGroups.clear();
     std::string path = locateDeckFile();
     std::vector<CardProto> deck;
     std::string err;
@@ -283,16 +344,77 @@ void sgs_start(int seed, int humanSeat, int hp, int baguaMode) {
     g_room->setLogSink([](const std::string& s) { js_log(s.c_str()); });
     g_room->setMaxTurns(300);
 
-    // 【八卦阵】发动方式：开局值 + 之后随时可从页面"设置"里改（动态读取）
+    // 【八卦阵】发动方式：开局值 + 之后随时可从页面菜单里改（动态读取）
     g_room->setEightDiagramMode(eightDiagramModeFromInt(baguaMode));
     g_room->setEightDiagramModeProvider([]() { return js_bagua_mode(); });
     js_log(str("【八卦阵】发动方式：", eightDiagramModeName(g_room->eightDiagramMode()),
-               "（可在右上角「设置」里随时改）")
+               "（可在右上角「菜单」里随时改）")
                .c_str());
 
     // 所有卡牌与装备技能
     registerStandardCards(*g_room);
 
+    // 展示事件不解析日志；回调只观察规则结果，时间控制仍在 wasm 内部。
+    g_room->registerTrigger("WebPhase", Event::PhaseStart, -1, -1000,
+        [](Room& r, TriggerParams& p) {
+            g_phase = static_cast<Phase>(p.number);
+            js_state(stateJson(r).c_str());
+            return true;
+        });
+    for (Event e : {Event::CardUsed, Event::CardResponded, Event::Judge,
+                    Event::Damaged, Event::Recover, Event::Dying,
+                    Event::CardsMoved, Event::CardFinished}) {
+        g_room->registerTrigger("WebPresentation", e, -1, -1000,
+            [e](Room& r, TriggerParams& p) {
+                if (e == Event::CardUsed) g_useGroups.push_back(++g_useSequence);
+                const int group = g_useGroups.empty() ? 0 : g_useGroups.back();
+                std::string type;
+                if (e == Event::CardUsed) type = "use";
+                else if (e == Event::CardResponded) type = "response";
+                else if (e == Event::Judge) type = "judge";
+                else if (e == Event::Damaged) type = "damage";
+                else if (e == Event::Recover) type = "recover";
+                else if (e == Event::Dying) type = "dying";
+                else if (e == Event::CardFinished) type = "finish";
+                else type = "move";
+                std::string j = str("{\"type\":\"", type, "\",\"group\":", group, ",\"who\":", p.who,
+                    ",\"amount\":", p.damage ? p.damage->amount : p.number,
+                    ",\"areaIndex\":", static_cast<int>(p.toArea), ",\"area\":\"", areaName(p.toArea),
+                    "\",\"reason\":\"", jsonEscape(p.judge ? p.judge->reason : p.reason), "\"");
+                if (e == Event::CardUsed && p.use) j += ",\"card\":" + protoJson(p.use->proto, p.use->cardId);
+                else if (e == Event::Judge && p.judge) j += ",\"card\":" + cardJson(r, p.judge->cardId);
+                else if (e == Event::CardResponded && p.cardId >= 0) j += ",\"card\":" + cardJson(r, p.cardId);
+                if (e == Event::CardUsed && p.use) {
+                    j += ",\"targets\":[";
+                    for (size_t i = 0; i < p.use->targets.size(); ++i) {
+                        if (i) j += ",";
+                        j += str(p.use->targets[i]);
+                    }
+                    j += "]";
+                }
+                if (e == Event::CardsMoved) {
+                    j += ",\"moves\":[";
+                    for (size_t i = 0; i < p.moves.size(); ++i) {
+                        if (i) j += ",";
+                        const auto& move = p.moves[i];
+                        const bool hidden = p.toArea == Area::Hand && g_humanSeat >= 0 && p.who != g_humanSeat;
+                        j += str("{\"fromOwner\":", move.fromOwner, ",\"fromArea\":", static_cast<int>(move.fromArea),
+                                 ",\"card\":", cardJson(r, move.cardId, hidden), "}");
+                    }
+                    j += "]";
+                }
+                j += "}";
+                js_state(stateJson(r).c_str());
+                js_event(j.c_str());
+                if (e == Event::CardFinished && !g_useGroups.empty()) g_useGroups.pop_back();
+                if (e == Event::CardUsed || e == Event::CardResponded || e == Event::Judge ||
+                    e == Event::Damaged || e == Event::Recover || e == Event::CardFinished || e == Event::CardsMoved) {
+                    int ms = js_speed_ms();
+                    if (ms > 0) emscripten_sleep(static_cast<unsigned>(e == Event::CardFinished ? ms / 3 : e == Event::CardsMoved ? std::min(ms, 240) : ms));
+                }
+                return true;
+            });
+    }
     // 回合开始 / 阵亡时推一次状态给页面
     g_room->registerTrigger("WebStateTurn", Event::TurnStart, -1, -1000,
                             [](Room& r, TriggerParams&) {

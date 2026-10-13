@@ -200,16 +200,29 @@ int Room::totalCardsTracked() const {
     return n;
 }
 
+void Room::notifyMove(const std::vector<CardMove>& moves, int owner, Area area) {
+    if (moves.empty()) return;
+    TriggerParams p;
+    p.event = Event::CardsMoved;
+    p.who = owner;
+    p.moves = moves;
+    p.toArea = area;
+    trigger(Event::CardsMoved, p);
+}
+
 void Room::moveCards(const std::vector<int>& ids, int toOwner, Area toArea,
                      const std::string& reason) {
     std::vector<int> moved;
+    std::vector<CardMove> moves;
     for (int c : ids) {
         if (c < 0 || areaOf(c) == Area::None) continue;
+        moves.push_back({c, ownerOf(c), areaOf(c)});
         removeCard(c);
         addCard(c, toOwner, toArea);
         moved.push_back(c);
     }
     if (moved.empty()) return;
+    notifyMove(moves, toOwner, toArea);
     std::string label;
     for (size_t i = 0; i < moved.size(); ++i) {
         if (i) label += "、";
@@ -245,6 +258,9 @@ std::vector<int> Room::drawCards(int who, int n) {
         out.push_back(c);
     }
     chat(str("  ", player(who).name, " 摸 ", static_cast<int>(out.size()), " 张牌"));
+    std::vector<CardMove> moves;
+    for (int c : out) moves.push_back({c, -1, Area::DrawPile});
+    notifyMove(moves, who, Area::Hand);
     return out;
 }
 
@@ -261,6 +277,9 @@ std::vector<int> Room::revealCards(int n) {
         addCard(c, -1, Area::Revealed);
         out.push_back(c);
     }
+    std::vector<CardMove> moves;
+    for (int c : out) moves.push_back({c, -1, Area::DrawPile});
+    notifyMove(moves, -1, Area::Revealed);
     return out;
 }
 
@@ -271,17 +290,22 @@ void Room::equipCard(int who, int cardId) {
         removeCard(old);
         addCard(old, -1, Area::DiscardPile);
         chat(str("  ", player(who).name, " 替换下 ", cardLabel(old)));
+        notifyMove({{old, who, Area::Equip}}, -1, Area::DiscardPile);
     }
+    CardMove move{cardId, ownerOf(cardId), areaOf(cardId)};
     removeCard(cardId);
     addCard(cardId, who, Area::Equip);
     chat(str("  ", player(who).name, " 装备 ", cardLabel(cardId)));
+    notifyMove({move}, who, Area::Equip);
 }
 
 void Room::putJudgeCard(int owner, int cardId) {
+    CardMove move{cardId, ownerOf(cardId), areaOf(cardId)};
     removeCard(cardId);
     cards_[cardId].playedBy = -1;
     addCard(cardId, owner, Area::Judge);
     chat(str("  ", cardLabel(cardId), " 置于 ", player(owner).name, " 的判定区"));
+    notifyMove({move}, owner, Area::Judge);
 }
 
 // ============================================================ 距离 / 牌堆工具
@@ -388,6 +412,12 @@ int Room::askForResponse(int who, const char* cardName, const std::string& promp
     removeCard(c);
     addCard(c, -1, Area::DiscardPile);
     chat(str("  ", p.name, " 打出 ", cardLabel(c)));
+    TriggerParams response;
+    response.event = Event::CardResponded;
+    response.who = who;
+    response.cardId = c;
+    response.reason = "响应";
+    trigger(Event::CardResponded, response);
     return c;
 }
 
@@ -464,6 +494,19 @@ bool Room::useCard(CardUseStruct& use) {
     trigger(Event::CardUsed, tp);
 
     announceUse(use);
+    auto finished = [&]() {
+        std::vector<CardMove> moves;
+        for (int c : use.cards) {
+            if (c >= 0 && areaOf(c) == Area::DiscardPile) moves.push_back({c, -1, Area::None});
+        }
+        notifyMove(moves, -1, Area::DiscardPile);
+        TriggerParams p;
+        p.event = Event::CardFinished;
+        p.who = use.user;
+        p.use = &use;
+        trigger(Event::CardFinished, p);
+        return true;
+    };
 
     // 【五谷丰登】在使用时就把牌亮出来（正式规则里这是公开信息）：
     // 否则"是否用【无懈可击】"的询问发生在亮牌之前，玩家根本没法判断。
@@ -481,7 +524,7 @@ bool Room::useCard(CardUseStruct& use) {
     if (use.proto.type == CardType::Equip) {
         int cid = use.cardId >= 0 ? use.cardId : (use.cards.empty() ? -1 : use.cards[0]);
         if (cid >= 0) equipCard(use.user, cid);
-        return true;
+        return finished();
     }
 
     // 4) 延时锦囊：置于目标判定区
@@ -491,7 +534,7 @@ bool Room::useCard(CardUseStruct& use) {
             putJudgeCard(t, use.cardId);
             cards_[use.cardId].playedBy = use.user;
         }
-        return true;
+        return finished();
     }
 
     // 5) 逐目标结算：先问无懈，再触发 CardEffect，最后执行效果
@@ -529,7 +572,7 @@ bool Room::useCard(CardUseStruct& use) {
     if (use.cardId >= 0 && areaOf(use.cardId) == Area::None) {
         addCard(use.cardId, -1, Area::DiscardPile);
     }
-    return true;
+    return finished();
 }
 
 // 无懈可击：奇偶翻转的简化链式结算（A 无懈 → B 无懈抵销 → 效果恢复 …）
@@ -586,6 +629,12 @@ bool Room::askNullification(const CardUseStruct& use, int target) {
                  playerName(target), ")", cancelled ? "，使其重新生效" : ""));
         removeCard(ncard);
         addCard(ncard, -1, Area::DiscardPile);
+        TriggerParams response;
+        response.event = Event::CardResponded;
+        response.who = nuser;
+        response.cardId = ncard;
+        response.reason = cancelled ? "恢复效果" : "抵消效果";
+        trigger(Event::CardResponded, response);
         cancelled = !cancelled;
         starter = nuser;
     }
@@ -617,6 +666,7 @@ int Room::judge(int who, const std::string& reason, JudgeStruct* out) {
 
     // 判定牌进弃牌堆（改判技能可在此前替换 js.cardId，本引擎无武将）
     addCard(js.cardId, -1, Area::DiscardPile);
+    notifyMove({{js.cardId, -1, Area::None}}, -1, Area::DiscardPile);
     if (out) *out = js;
     return js.cardId;
 }
@@ -762,6 +812,12 @@ void Room::enterDying(int who, int killer) {
                 removeCard(r.cards[0]);
                 addCard(r.cards[0], -1, Area::DiscardPile);
                 chat(str("  ", playerName(helper), " 使用 ", cardLabel(r.cards[0]), " 救助 ", p.name));
+                TriggerParams response;
+                response.event = Event::CardResponded;
+                response.who = helper;
+                response.cardId = r.cards[0];
+                response.reason = "救援";
+                trigger(Event::CardResponded, response);
                 recover(who, 1);
                 used = true;
             }
@@ -949,6 +1005,7 @@ void Room::runDiscardPhase(int who) {
     a.cards = p.hand;
     a.minCards = need;
     a.maxCards = need;
+    a.allowCancel = false;
     a.prompt = str("弃牌阶段：请弃置 ", need, " 张手牌（手牌上限 = 体力 ", limit, "）");
     AskResult r = askAgent(a);
 
@@ -956,10 +1013,9 @@ void Room::runDiscardPhase(int who) {
     for (int c : r.cards) {
         if (contains(p.hand, c) && !contains(picked, c)) picked.push_back(c);
     }
-    while (static_cast<int>(picked.size()) < need && !p.hand.empty()) {
-        int c = p.hand[0];
+    for (int c : p.hand) {
+        if (static_cast<int>(picked.size()) >= need) break;
         if (!contains(picked, c)) picked.push_back(c);
-        else break;
     }
     if (static_cast<int>(picked.size()) > need) picked.resize(need);
     discardCards(picked, "弃牌阶段");

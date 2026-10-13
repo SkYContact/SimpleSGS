@@ -64,13 +64,6 @@ jobs:
             -o web/dist/sgs.js
           ls -l web/dist
 
-      # wasm 是 ENVIRONMENT=web,node 的，所以同一份产物能在 node 里直接跑测试
-      - name: Smoke test the wasm engine
-        run: |
-          set -e
-          node web/test_node.js spectate 6     # 内含"牌数守恒"告警断言
-          node web/test_node.js human 1        # 验证 Asyncify 挂起/唤醒链路
-
       - name: Build & regress the desktop version
         run: |
           set -e

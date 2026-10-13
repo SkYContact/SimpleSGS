@@ -269,6 +269,7 @@ static int pickCardFrom(Room& room, int user, int target, const char* tag, const
     a.subject = target;
     a.cards = cands;
     a.hidden = true;  // 手牌只看得到张数
+    a.allowCancel = false;
     a.prompt = prompt;
     AskResult r = room.askAgent(a);
     for (int c : r.cards) {
@@ -399,6 +400,7 @@ static void effectHarvest(Room& room, CardUseStruct& use, int target) {
     Ask a;
     a.kind = AskKind::Option;
     a.tag = "Harvest";
+    a.allowCancel = false;
     a.who = target;
     a.prompt = "【五谷丰登】：选择一张牌获得";
     for (int c : use.sharedCards) {

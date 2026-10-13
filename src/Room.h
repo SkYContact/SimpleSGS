@@ -123,6 +123,8 @@ public:
     void setLogSink(std::function<void(const std::string&)> fn) { logSink_ = std::move(fn); }
     int drawPileSize() const { return static_cast<int>(drawPile_.size()); }
     int discardPileSize() const { return static_cast<int>(discardPile_.size()); }
+    int discardTop() const { return discardPile_.empty() ? -1 : discardPile_.back(); }
+    const std::vector<int>& revealedCards() const { return revealedPile_; }
     // 牌数守恒自检：所有区域的牌加起来应该等于整副牌（少了就说明有牌被"吃掉"了）
     int totalCardsTracked() const;
     int deckSize() const { return static_cast<int>(cards_.size()); }
@@ -132,6 +134,7 @@ private:
     void reshuffle();
     void clearPlayerCards(int who);
     void announceUse(const CardUseStruct& use);
+    void notifyMove(const std::vector<CardMove>& moves, int owner, Area area);
 
     std::vector<std::unique_ptr<Player>> players_;
     std::vector<Card> cards_;
