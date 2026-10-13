@@ -177,7 +177,8 @@ private:
 FarmLegResult sgs_farm_run(const std::vector<CardProto>& deck, const std::string& model_a,
                            const std::string& model_b, const std::string& ort_dir,
                            int chains, int games, unsigned seed0, int banks, int hp,
-                           int max_turns, const std::string& bagua) {
+                           int max_turns, const std::string& bagua,
+                           const std::string& backend, int slots) {
     FarmLegResult res;
     auto farm = std::make_unique<inferfarm::Farm>();   // sizeof(Farm) 大，走堆
     inferfarm::FarmConfig cfg;
@@ -185,7 +186,8 @@ FarmLegResult sgs_farm_run(const std::vector<CardProto>& deck, const std::string
     cfg.chains = chains;
     cfg.games = games;
     cfg.seed0 = seed0;
-    cfg.slots = 64;
+    cfg.slots = slots > 0 ? slots : 64;
+    cfg.stagger_ms = 0;   // SGS 局短链多：默认 10ms 错峰点火在千链形态=40s 纯睡眠
     if (banks > 0) cfg.banks = banks;
 
     SgsFarmCtx* ctx = new SgsFarmCtx();
@@ -201,15 +203,17 @@ FarmLegResult sgs_farm_run(const std::vector<CardProto>& deck, const std::string
     if (!model_b.empty()) {
         // W2 双组：组0=model_a（座位0），组1=model_b（座位1）
         inferfarm::DeviceConfig d0, d1;
-        d0.model.backend = "ort"; d0.model.model_path = model_a;
+        d0.model.backend = backend; d0.model.model_path = model_a;
+        d0.model.engine_path = model_a;
         d0.model.ort_dir = ort_dir; d0.model.ort_threads = 1; d0.banks = banks > 0 ? banks : 2;
-        d1 = d0; d1.model.model_path = model_b;
+        d1 = d0; d1.model.model_path = model_b; d1.model.engine_path = model_b;
         cfg.devices.push_back(d0);
         cfg.devices.push_back(d1);
         g_fb_groups = 2;
     } else {
-        cfg.model.backend = "ort";
+        cfg.model.backend = backend;
         cfg.model.model_path = model_a;
+        cfg.model.engine_path = model_a;
         cfg.model.ort_dir = ort_dir;
         cfg.model.ort_threads = 1;
         g_fb_groups = 1;

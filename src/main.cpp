@@ -38,6 +38,8 @@ struct Options {
     int banks = 2;             // 农场银行数
     std::string model;         // 农场模型（--farm 用，=座位0/单模型）
     std::string model1;        // 农场双组模式：座位1 模型（W2 组路由）
+    std::string backend = "ort";   // 农场推理后端：ort | trt
+    int slots = 64;            // 银行批形状（须与模型烤制的 fb 批一致）
     std::string nn[2];     // 各座位 ONNX 模型（空 = AiAgent 启发式）
     std::string ort_dir = "C:/Users/41601/Miniconda3/envs/q35/Lib/site-packages/onnxruntime/capi";
     bool quiet = false;
@@ -110,6 +112,10 @@ int main(int argc, char** argv) {
             opt.farm = true;
         } else if (matchArg(argv[i], "--model") && i + 1 < argc) {
             opt.model = argv[++i];
+        } else if (matchArg(argv[i], "--slots") && i + 1 < argc) {
+            opt.slots = std::atoi(argv[++i]);
+        } else if (matchArg(argv[i], "--backend") && i + 1 < argc) {
+            opt.backend = argv[++i];
         } else if (matchArg(argv[i], "--model1") && i + 1 < argc) {
             opt.model1 = argv[++i];
         } else if (matchArg(argv[i], "--chains") && i + 1 < argc) {
@@ -163,7 +169,8 @@ int main(int argc, char** argv) {
     if (opt.farm) {
         if (opt.model.empty()) { std::cout << "--farm 需要 --model <onnx>\n"; return 1; }
         sgs_farm_run(deck, opt.model, opt.model1, opt.ort_dir, opt.chains, opt.games,
-                     opt.seed, opt.banks, opt.hp, opt.maxTurns, opt.bagua);
+                     opt.seed, opt.banks, opt.hp, opt.maxTurns, opt.bagua, opt.backend,
+                     opt.slots);
         return 0;
     }
 

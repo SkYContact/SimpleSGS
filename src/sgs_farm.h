@@ -29,6 +29,7 @@ struct FarmLegResult {
 FarmLegResult sgs_farm_run(const std::vector<CardProto>& deck, const std::string& model_a,
                            const std::string& model_b, const std::string& ort_dir,
                            int chains, int games, unsigned seed0, int banks, int hp,
-                           int max_turns, const std::string& bagua);
+                           int max_turns, const std::string& bagua,
+                           const std::string& backend = "ort", int slots = 64);
 
 }  // namespace sgs
