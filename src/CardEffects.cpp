@@ -487,6 +487,9 @@ void registerStandardCards(Room& room) {
         if (owner < 0 || !r.player(owner).alive) return true;
         if (!r.hasEquipNamed(owner, EquipSlot::Weapon, CardName::Axe)) return true;
         std::vector<int> cands = r.allCardsOf(owner);
+        // 贯石斧自身不能作为代价弃掉（它是本技能的来源牌，且还在装备区）
+        int axeId = r.equipId(owner, EquipSlot::Weapon);
+        cands.erase(std::remove(cands.begin(), cands.end(), axeId), cands.end());
         if (cands.size() < 2) return true;
         Ask a;
         a.kind = AskKind::MultiCard;

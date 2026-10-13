@@ -17,6 +17,6 @@ if not exist "%VSDIR%\VC\Auxiliary\Build\vcvars64.bat" (
 call "%VSDIR%\VC\Auxiliary\Build\vcvars64.bat" >nul
 cd /d "%~dp0"
 if not exist build mkdir build
-cl /nologo /std:c++17 /utf-8 /EHsc /W3 /Isrc /Fo:build\ /Fe:build\sgs1v1.exe src\*.cpp
+cl /nologo /std:c++17 /utf-8 /EHsc /W3 /Z7 /MD /Isrc /ID:\inferfarm\include /Fo:build\ /Fe:build\sgs1v1.exe src\*.cpp /link /MAP:build\sgs1v1.map D:\inferfarm\build\Release\inferfarm.lib
 if errorlevel 1 exit /b 1
 echo [ok] build\sgs1v1.exe

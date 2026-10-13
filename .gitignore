@@ -1,46 +1,12 @@
-# 本地编译产物
 build/
-build_msvc/
+run/
+repro/
+ckpt/
+models/
+*.bcb
 *.obj
-*.exe
 *.pdb
-*.ilk
-*.exp
-*.lib
-
-# 临时文件 / 日志
-*.log
-chk.txt
-regress.txt
-
-# 排查/回归时随手生成的临时脚本与输出（别提交进仓库）
-/bg_*.txt
-/bg_test.bat
-/run_seeds.bat
-/chk.txt
-
-# 抓 GitHub 页面/徽章做排查时留下的临时文件
-/badge.svg
-/b.svg
-/b2.svg
-/a2.html
-/actions.html
-/run.html
-/job.html
-/live.html
-/ci.json
-/ci_status.py
-
-# 编辑器 / 工具
-.vs/
-.vscode/
-.idea/
-node_modules/
-.playwright-cli/
-
-# 说明：web/dist 里的 sgs.js / sgs.wasm / sgs.data 是编译产物，但故意提交，
-# 这样克隆下来可以直接起个静态服务器跑（也方便挂 GitHub Pages）。
-# 想改成不提交，把下面三行取消注释即可。
-# web/dist/sgs.js
-# web/dist/sgs.wasm
-# web/dist/sgs.data
+*.map
+upstream.tgz
+audit_out.txt
+__pycache__/
