@@ -6,7 +6,7 @@
   const I = window.SgsInteraction;
   const motion = window.SgsMotion;
   const S = { module: null, running: false, seat: 0, state: null, model: null,
-    focusCard: null, cards: new Map(), trail: [], logs: [], seed: 1, audio: null,
+    focusCard: null, cards: new Map(), trail: [], logs: [], seed: 1,
     handPage: 0, logHover: false, logPinned: false, logFocus: false, logUnread: 0,
     infoCard: null, origins: new Map(), activeGroup: 0, trailTimer: null, trailVersion: 0, latestJudge: -1 };
   const dialogIds = ['menuDialog', 'historyDialog', 'resultDialog'];
@@ -29,42 +29,14 @@
   }
   function closeDialogs() { dialogIds.forEach(id => { if ($(id).open) $(id).close(); }); }
   function rememberCards(cards) { cards.forEach(c => { if (!c.hidden) S.cards.set(c.id, c); }); }
-  function sound(kind) {
-    if (!$('soundSetting').checked || !S.audio) return;
-    const ctx = S.audio;
-    if (ctx.state === 'suspended') return;
-    const osc = ctx.createOscillator(), gain = ctx.createGain();
-    osc.type = 'triangle'; osc.frequency.setValueAtTime(kind === 'damage' ? 100 : 330, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(65, ctx.currentTime + .075);
-    gain.gain.setValueAtTime(.045, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + .09);
-    osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + .1);
-  }
-  function enableAudio() {
-    if (!$('soundSetting').checked) return;
-    try {
-      const Audio = window.AudioContext || window.webkitAudioContext;
-      if (Audio) { S.audio ||= new Audio(); S.audio.resume().catch(() => {}); }
-    } catch { /* 不支持音频时仍可正常对局。 */ }
-  }
-  function saveSettings() {
-    try { localStorage.setItem(settingsKey, JSON.stringify({ bagua: $('baguaSelect').value,
-      speed: $('speedSelect').value, sound: $('soundSetting').checked, motion: $('motionSetting').checked })); } catch { /* 私密模式 */ }
-  }
   function applySettings() {
     window.sgsBaguaMode = Number($('baguaSelect').value);
-    window.sgsSpeedMs = Number($('speedSelect').value);
-    document.documentElement.classList.toggle('reduce-motion', $('motionSetting').checked);
-    if (!motion.enabled()) motion.clear();
-    saveSettings();
+    try { localStorage.setItem(settingsKey, JSON.stringify({ bagua: $('baguaSelect').value })); } catch { /* 私密模式 */ }
   }
   function loadSettings() {
-    $('motionSetting').checked = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || false;
     try {
       const saved = JSON.parse(localStorage.getItem(settingsKey) || '{}');
       if (['0','1','2'].includes(saved.bagua)) $('baguaSelect').value = saved.bagua;
-      if (['0','100','320','550'].includes(saved.speed)) $('speedSelect').value = saved.speed;
-      if (typeof saved.sound === 'boolean') $('soundSetting').checked = saved.sound;
-      if (typeof saved.motion === 'boolean') $('motionSetting').checked = saved.motion;
     } catch { /* 损坏的设置使用默认值。 */ }
     applySettings();
   }
@@ -279,8 +251,8 @@
       S.trailTimer = setTimeout(() => {
         if (version !== S.trailVersion) return;
         S.trail = []; renderTrail();
-      }, motion.enabled() ? 220 : 0);
-    }, motion.enabled() ? delay : 0);
+      }, 220);
+    }, delay);
   }
   function submit(cancel = false) {
     if (window.sgsAutoPlay) return;
@@ -398,15 +370,13 @@
           motion.targets(landing, event.who, event.targets || [], bottomId());
         }
       }
-      sound('card');
       if (event.type === 'response' && !event.group) settleTrail(0, 650);
     }
     if (event.type === 'finish') settleTrail(event.group);
     if (['damage','recover','dying'].includes(event.type)) {
       $('eventCaption').textContent = event.type === 'damage' ? `${who}受到 ${event.amount} 点伤害` : event.type === 'recover' ? `${who}回复 ${event.amount} 点体力` : `${who}濒死，等待救援`;
       const seat = $(event.who === bottomId() ? 'selfSeat' : 'opponentSeat');
-      if (motion.enabled() && seat.animate) seat.animate(event.type === 'damage' ? [{transform:'translateX(0)'},{transform:'translateX(-5px)'},{transform:'translateX(4px)'},{transform:'translateX(0)'}] : [{filter:'brightness(1)'},{filter:'brightness(1.3)'},{filter:'brightness(1)'}], {duration:220});
-      sound(event.type);
+      if (seat.animate) seat.animate(event.type === 'damage' ? [{transform:'translateX(0)'},{transform:'translateX(-5px)'},{transform:'translateX(4px)'},{transform:'translateX(0)'}] : [{filter:'brightness(1)'},{filter:'brightness(1.3)'},{filter:'brightness(1)'}], {duration:220});
     }
   };
   window.sgsOnDone = () => {
@@ -425,7 +395,7 @@
       showDialog('menuDialog'); document.querySelector('.replay-settings').open = true;
       $('seedInput').focus(); $('seedInput').reportValidity(); return;
     }
-    closeDialogs(); enableAudio();
+    closeDialogs();
     S.running = true; S.seat = seat; S.seed = input; S.state = null; S.model = null;
     S.focusCard = S.infoCard = null; S.trail = []; S.logs = []; S.cards.clear(); motion.clear();
     S.activeGroup = 0; S.latestJudge = -1; clearTimeout(S.trailTimer);
@@ -454,6 +424,7 @@
     $('startButton').disabled = $('spectateButton').disabled = true;
   }
   function bindUi() {
+    window.sgsSpeedMs = 320;
     loadSettings(); $('seedInput').value = randomSeed();
     window.sgsAutoPlay = false; window.sgsAnswer = { ready:false, requestId:-1, option:-1, cards:[], targets:[] };
     $('startButton').onclick = () => startGame(Number(document.querySelector('input[name="seat"]:checked').value));
@@ -484,7 +455,7 @@
     $('board').addEventListener('pointerout', e => { const card = e.target.closest('[data-help]'); if (card && !card.contains(e.relatedTarget)) { S.infoCard = null; renderInfo(); } });
     $('board').addEventListener('focusout', e => { if (!e.relatedTarget?.closest('[data-help]')) { S.infoCard = null; renderInfo(); } });
     $('reseed').onclick = () => { $('seedInput').value = randomSeed(); };
-    ['baguaSelect','speedSelect','soundSetting','motionSetting'].forEach(id => { $(id).onchange = () => { applySettings(); enableAudio(); }; });
+    $('baguaSelect').onchange = applySettings;
     $('rematchButton').onclick = () => { $('seedInput').value = randomSeed(); startGame(S.seat); };
     $('returnButton').onclick = returnToLobby;
     $('returnLobbyButton').onclick = returnToLobby;
