@@ -13,6 +13,18 @@ build_msvc/
 chk.txt
 regress.txt
 
+# 抓 GitHub 页面/徽章做排查时留下的临时文件
+/badge.svg
+/b.svg
+/b2.svg
+/a2.html
+/actions.html
+/run.html
+/job.html
+/live.html
+/ci.json
+/ci_status.py
+
 # 编辑器 / 工具
 .vs/
 .vscode/
