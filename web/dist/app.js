@@ -122,20 +122,24 @@ function renderAsk(ask) {
       <span class="ask-hint">${hintFor(ask)}</span>
     </div>`;
 
+  // 三种候选按"有没有内容"分别渲染，可以同时出现——
+  // 例如「八卦阵」询问就是 手牌【闪】+ 额外动作「发动判定」摆在一起让玩家一次选完。
   let body = '';
-  if (ask.kind === 'card' || ask.kind === 'multi') {
-    const cards = ask.cards.map((c, i) =>
+  if (ask.cards.length) {
+    const cards = ask.cards.map((c) =>
       `<div class="ask-card" data-card="${c.id}">${c.label.startsWith('手牌(未知)')
         ? '手牌(未知)'
         : c.label}<span class="area">${c.area}</span></div>`).join('');
-    body = `<div class="ask-list">${cards}</div>`;
-  } else if (ask.kind === 'option') {
+    body += `<div class="ask-list">${cards}</div>`;
+  }
+  if (ask.options.length) {
     const opts = ask.options.map((o, i) => `<div class="ask-opt" data-opt="${i}">${o}</div>`).join('');
-    body = `<div class="ask-list">${opts}</div>`;
-  } else if (ask.kind === 'target') {
-    const ts = ask.targets.map(t =>
+    body += `<div class="ask-list">${opts}</div>`;
+  }
+  if (ask.targets.length) {
+    const ts = ask.targets.map((t) =>
       `<div class="ask-target" data-target="${t.id}">${t.name}（体力 ${t.hp}/${t.maxHp}）</div>`).join('');
-    body = `<div class="ask-list">${ts}</div>`;
+    body += `<div class="ask-list">${ts}</div>`;
   }
 
   bar.innerHTML = title + body + `
@@ -148,24 +152,32 @@ function renderAsk(ask) {
   // 事件绑定
   bar.querySelectorAll('[data-card]').forEach(el => el.onclick = () => {
     const id = Number(el.dataset.card);
-    if (ask.kind === 'multi') {
+    // 需要"恰好 N 张"的多选（弃牌/丈八蛇矛/贯石斧）选够就自动提交，见 autoSubmitIfComplete
+    if (ask.kind === 'multi' && fixedCount(ask) !== 1) {
       if (S.selected.has(id)) S.selected.delete(id); else S.selected.add(id);
       el.classList.toggle('sel');
       updateConfirmLabel();
+      autoSubmitIfComplete(ask);
+    } else if (ask.kind === 'multi') {
+      S.selected.clear();
+      S.selected.add(id);
+      el.classList.add('sel');
+      autoSubmitIfComplete(ask);
     } else {
-      submit(-1, [id], []);
+      submit(-1, [id], []);  // 单选牌（响应类）点一下就提交
     }
   });
   bar.querySelectorAll('[data-opt]').forEach(el => el.onclick = () => submit(Number(el.dataset.opt), [], []));
   bar.querySelectorAll('[data-target]').forEach(el => el.onclick = () => {
     const id = Number(el.dataset.target);
-    if (ask.maxTargets > 1) {
-      if (S.selected.has(id)) S.selected.delete(id); else S.selected.add(id);
-      el.classList.toggle('sel');
-      updateConfirmLabel();
-    } else {
-      submit(-1, [], [id]);
+    if (fixedCount(ask) === 1 || ask.kind !== 'target') {
+      submit(-1, [], [id]);  // 只要 1 个目标：点一下就提交
+      return;
     }
+    if (S.selected.has(id)) S.selected.delete(id); else S.selected.add(id);
+    el.classList.toggle('sel');
+    updateConfirmLabel();
+    autoSubmitIfComplete(ask);
   });
   const confirm = $('askConfirm');
   if (confirm) confirm.onclick = () => {
@@ -181,10 +193,29 @@ function renderAsk(ask) {
   updateConfirmLabel();
 }
 
+// 需要选的数量是"固定值"时（min==max）选够就自动提交 —— 不然会出现
+// "点牌只勾选、又没有确认按钮"的死局（弃牌阶段只需要 1 张，曾经卡死过）。
+// 只有数量是区间（min<max）时才显示「确认」，让玩家自己决定选几张。
 function needConfirm(ask) {
-  if (ask.kind === 'multi') return ask.maxCards > 1 || ask.minCards > 1;
-  if (ask.kind === 'target') return ask.maxTargets > 1;
+  if (ask.kind === 'multi') return ask.minCards !== ask.maxCards;
+  if (ask.kind === 'target') return ask.minTargets !== ask.maxTargets;
   return false;
+}
+
+// 固定数量返回该数量，区间返回 -1
+function fixedCount(ask) {
+  if (ask.kind === 'multi') return ask.minCards === ask.maxCards ? ask.minCards : -1;
+  if (ask.kind === 'target') return ask.minTargets === ask.maxTargets ? ask.minTargets : -1;
+  return -1;
+}
+
+// 多选类询问选够固定数量就自动提交
+function autoSubmitIfComplete(ask) {
+  const need = fixedCount(ask);
+  if (need <= 0 || S.selected.size < need) return false;
+  if (ask.kind === 'multi') submit(-1, [...S.selected], []);
+  else submit(-1, [], [...S.selected]);
+  return true;
 }
 
 function cancelText(ask) {

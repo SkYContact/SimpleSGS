@@ -460,8 +460,10 @@ void registerStandardCards(Room& room) {
             a.who = p.who;
             a.subject = p.source;
             a.options = {"发动【八卦阵】判定", "不发动"};
-            a.prompt = str("【八卦阵】：是否发动判定？（红色则视为打出【闪】",
-                           hasJink ? "，判定失败仍可打出手牌【闪】" : "，失败就只能挨打", "）");
+            a.prompt = str("【八卦阵】：是否发动判定？（红色＝视为打出【闪】",
+                           hasJink ? "，你保留手牌【闪】；判定失败再问你是否打出手牌【闪】"
+                                   : "，判定失败就只能承受",
+                           "）");
             AskResult res = r.askAgent(a);
             if (res.option != 0) return true;
         }

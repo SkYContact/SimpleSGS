@@ -40,14 +40,15 @@
           <label class="setting-row">
             <span>【八卦阵】发动</span>
             <select id="baguaSelect">
-              <option value="0" selected>自动（没手牌【闪】才判定）</option>
-              <option value="1">每次询问我是否发动</option>
+              <option value="1" selected>每次询问我是否发动（正式规则）</option>
+              <option value="0">自动（没手牌【闪】才判定）</option>
               <option value="2">关闭（只打手牌【闪】）</option>
             </select>
           </label>
           <p class="setting-hint">
             改动即时生效（下一次需要判定时就用新设置）。<br>
-            判定红色＝视为打出【闪】（省下一张手牌【闪】）；判定失败仍可再打出手牌【闪】。
+            询问档的流程：先问是否发动 → <b>判定红色＝视为打出【闪】</b>（不再问手牌闪）；
+            判定失败才问你是否打出手牌【闪】。
           </p>
         </div>
       </div>

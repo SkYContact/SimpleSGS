@@ -147,7 +147,8 @@ private:
     int winner_ = -1;   // -1 未结束；-2 平局；>=0 获胜者
     int maxTurns_ = 200;
     bool silent_ = false;
-    EightDiagramMode eightDiagramMode_ = EightDiagramMode::Auto;
+    // 默认 Ask（正式规则/QSanguosha 行为）：每次需要【闪】都先问"是否发动八卦阵"
+    EightDiagramMode eightDiagramMode_ = EightDiagramMode::Ask;
     std::function<int()> baguaModeProvider_;
     std::function<void(const std::string&)> logSink_;
 };

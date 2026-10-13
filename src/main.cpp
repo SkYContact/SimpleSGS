@@ -25,7 +25,7 @@ struct Options {
     int games = 1;         // 自对弈局数
     int maxTurns = 200;    // 防平局死循环
     std::string deck;      // 牌堆数据文件
-    std::string bagua = "auto";  // 【八卦阵】发动方式：auto / ask / off
+    std::string bagua = "ask";   // 【八卦阵】发动方式：auto / ask / off（默认 ask＝正式规则）
     bool quiet = false;
 };
 
@@ -39,7 +39,7 @@ void usage() {
         "  --seed <N>      随机种子\n"
         "  --max-turns <N> 单局回合上限（默认 200）\n"
         "  --deck <path>   牌堆 csv 路径\n"
-        "  --bagua <mode>  【八卦阵】发动方式：auto(默认，没手牌闪才判) / ask(每次问我) / off(从不)\n"
+        "  --bagua <mode>  【八卦阵】发动方式：ask(默认，每次需要【闪】先问是否发动) / auto(没手牌闪才判) / off(从不)\n"
         "  --quiet         不打印对局过程（跑批用）\n";
 }
 

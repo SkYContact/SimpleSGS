@@ -202,6 +202,8 @@ setTimeout(() => {
   const bagua = $id('baguaSelect');
   if (!sBtn || !sPanel || !bagua) errors.push('设置面板元素缺失');
   else {
+    // 默认必须是「每次询问我是否发动」（正式规则，与 QSanguosha 的 EightDiagramSkill 一致）
+    if (bagua.value !== '1') errors.push('八卦阵默认档不是「询问」而是 ' + bagua.value);
     sBtn.onclick();                                   // 打开面板
     if (!sPanel.classList.contains('open')) errors.push('点设置按钮没打开面板');
     bagua.value = '1';
