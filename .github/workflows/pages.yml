@@ -79,10 +79,12 @@ jobs:
             src/AiAgent.cpp src/ConsoleAgent.cpp src/main.cpp
           /tmp/sgs1v1 --games 100 --seed 7 --quiet | tail -6
 
+      # 注意：这里不用 enablement:true —— GITHUB_TOKEN 没有权限通过 REST API
+      # 创建 Pages 站点（会报 "Resource not accessible by integration"）。
+      # 首次需要在仓库里手动开一次（只需一次）：
+      #   Settings → Pages → Build and deployment → Source 选 "GitHub Actions"
       - name: Configure Pages
         uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

@@ -281,8 +281,9 @@ web\serve.bat          # 等价于 python -m http.server 8000 --directory web\di
    再用 g++ 编桌面版跑 100 局回归
 4. 把 `web/dist` 发布到 GitHub Pages → <https://skycontact.github.io/SimpleSGS/>
 
-> Pages 的 Source 需要是 **GitHub Actions**（工作流里用了 `configure-pages` 的
-> `enablement: true` 会自动开；如果失败就去 Settings → Pages 手动选一下）。
+> **首次需要在仓库里手动开一次 Pages**（GITHUB_TOKEN 没权限用 API 自动创建站点）：
+> `Settings → Pages → Build and deployment → Source` 选 **GitHub Actions**，
+> 然后到 Actions 里 re-run 一次工作流即可。之后就全自动了。
 
 ### 不开浏览器也能验证
 
