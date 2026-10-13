@@ -81,8 +81,7 @@ static void writeMinidump(EXCEPTION_POINTERS* ep) {
     MEI mei = { GetCurrentThreadId(), &epv, 0 };
     BOOL okd = fn(GetCurrentProcess(), GetCurrentProcessId(), f, 0 /*MiniDumpNormal*/,
        &mei, nullptr, nullptr);
-    fprintf(stderr, "[dmp] write=%d gle=%lu path=%s
-", (int)okd, GetLastError(), path);
+    fprintf(stderr, "[dmp] write=%d gle=%lu path=%s\n", (int)okd, GetLastError(), path);
     CloseHandle(f);
 }
 

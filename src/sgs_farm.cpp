@@ -113,6 +113,19 @@ public:
 
 private:
     // 银行前向：argmax 候选下标；失败 -1（=放弃语义，SGS 无"必须答"硬性点）
+    // 契约：模型输入 slot_code/cand_code 为 INT64（sgs_export.py torch long），
+    // 而 SgsFeatures 持 int32——必须逐元素升宽后再拷入槽行。
+    // 血律（2026-10-14 深夜案）：直接 memcpy int32 缓冲按 int64 行宽=每决策
+    // 越界读 312B（页界 AV，间歇崩）+ 卡牌编码全垃圾（int32 对被误读为 int64）。
+    std::vector<int64_t> slot_i64_, cand_i64_;
+    int64_t* slot64(const SgsFeatures& f) {
+        slot_i64_.assign(f.slot_code.begin(), f.slot_code.end());
+        return slot_i64_.data();
+    }
+    int64_t* cand64(const SgsFeatures& f) {
+        cand_i64_.assign(f.cand_code.begin(), f.cand_code.end());
+        return cand_i64_.data();
+    }
     int forward(const SgsFeatures& f, long long t_ask0) {
         if (getenv("FARM_PROF_SHELL")) {   // 切片对拍：跳过推理，恒选 0 号候选
             SgsFeatures g; (void)g;
@@ -133,9 +146,9 @@ private:
             if (rb > bytes) std::memset((char*)dst + bytes, 0, rb - bytes);
         };
         rowcpy("scal", f.scal, sizeof(float) * F_SCAL);
-        rowcpy("slot_code", f.slot_code.data(), sizeof(int64_t) * SEAT_N);
+        rowcpy("slot_code", slot64(f), sizeof(int64_t) * SEAT_N);
         rowcpy("slot_attr", f.slot_attr.data(), sizeof(float) * SEAT_N * SLOT_ATTR);
-        rowcpy("cand_code", f.cand_code.data(), sizeof(int64_t) * CAND_CAP);
+        rowcpy("cand_code", cand64(f), sizeof(int64_t) * CAND_CAP);
         rowcpy("cand_attr", f.cand_attr.data(), sizeof(float) * CAND_CAP * CAND_ATTR);
         rowcpy("cand_mask", f.cand_mask.data(), sizeof(float) * CAND_CAP);
 
