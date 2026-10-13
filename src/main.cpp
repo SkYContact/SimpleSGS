@@ -40,6 +40,7 @@ struct Options {
     std::string model1;        // 农场双组模式：座位1 模型（W2 组路由）
     std::string backend = "ort";   // 农场推理后端：ort | trt
     int slots = 64;            // 银行批形状（须与模型烤制的 fb 批一致）
+    int workers = 0;           // 农场工人数（0=物理核）
     std::string nn[2];     // 各座位 ONNX 模型（空 = AiAgent 启发式）
     std::string ort_dir = "C:/Users/41601/Miniconda3/envs/q35/Lib/site-packages/onnxruntime/capi";
     bool quiet = false;
@@ -112,6 +113,8 @@ int main(int argc, char** argv) {
             opt.farm = true;
         } else if (matchArg(argv[i], "--model") && i + 1 < argc) {
             opt.model = argv[++i];
+        } else if (matchArg(argv[i], "--workers") && i + 1 < argc) {
+            opt.workers = std::atoi(argv[++i]);
         } else if (matchArg(argv[i], "--slots") && i + 1 < argc) {
             opt.slots = std::atoi(argv[++i]);
         } else if (matchArg(argv[i], "--backend") && i + 1 < argc) {

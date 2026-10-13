@@ -14,6 +14,7 @@ namespace sgs {
 //      词表本身随 emit 文件头落盘，Python 侧从文件头读，不硬编码）----
 namespace {
 std::vector<std::string> g_card_vocab;  // 卡名 -> code
+std::vector<int> g_card_code_by_id;     // 卡 id -> code（O(1) 查表，避免每决策逐槽 strcmp）
 }
 
 void registerCardVocab(const std::vector<CardProto>& deck) {
@@ -21,6 +22,12 @@ void registerCardVocab(const std::vector<CardProto>& deck) {
     for (const CardProto& p : deck) {
         if (std::find(g_card_vocab.begin(), g_card_vocab.end(), p.name) == g_card_vocab.end()) {
             g_card_vocab.push_back(p.name);
+        }
+    }
+    g_card_code_by_id.assign(deck.size(), -1);
+    for (size_t i = 0; i < deck.size(); ++i) {
+        for (int c = 0; c < static_cast<int>(g_card_vocab.size()); ++c) {
+            if (g_card_vocab[c] == deck[i].name) { g_card_code_by_id[i] = c; break; }
         }
     }
 }
@@ -35,7 +42,10 @@ int nameCode(const std::string& name) {
 }
 
 int cardCodeOf(const Room& room, int cardId) {
-    return cardId >= 0 ? nameCode(room.card(cardId).name()) : -1;
+    if (cardId < 0) return -1;
+    if (cardId >= 0 && cardId < static_cast<int>(g_card_code_by_id.size()))
+        return g_card_code_by_id[cardId];   // O(1)
+    return nameCode(room.card(cardId).name());
 }
 
 SgsFeatures::SgsFeatures() {
