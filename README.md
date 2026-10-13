@@ -6,7 +6,10 @@
 
 同一份 C++ 内核既能在命令行跑，也能用 Emscripten 编成 WebAssembly 在浏览器里玩（见第七节）。
 
+[![Build wasm & deploy demo](https://github.com/SkYContact/SimpleSGS/actions/workflows/pages.yml/badge.svg)](https://github.com/SkYContact/SimpleSGS/actions/workflows/pages.yml)
+
 * 仓库：<https://github.com/SkYContact/SimpleSGS>
+* **在线试玩**：<https://skycontact.github.io/SimpleSGS/>（CI 从源码编 wasm 后自动发布）
 * 许可：**GPL-3.0**（见 [LICENSE](LICENSE)）
 
 三分钟上手：
@@ -267,6 +270,19 @@ web\serve.bat          # 等价于 python -m http.server 8000 --directory web\di
 
 页面上可以：**人机对战（先手/后手）**、**AI 观战**、调播放速度、随时「托管 AI」、
 看实时棋盘（体力/手牌/装备/判定区/距离/攻击范围）和逐条对局日志。
+
+### 自动构建 + 在线发布（GitHub Actions / Pages）
+
+`.github/workflows/pages.yml` 在每次推到 `main`（且改动落在 `src/` `web/` `data/`）时：
+
+1. 装 emsdk（用 `actions/cache` 缓存那 ~700MB 工具链，第一次之后很快）
+2. 用和本地一致的参数编 wasm（`em++ -O1 ... -sENVIRONMENT=web,node`）
+3. **跑测试**：`test_node.js spectate` + `test_node.js human`（验证挂起-唤醒链路），
+   再用 g++ 编桌面版跑 100 局回归
+4. 把 `web/dist` 发布到 GitHub Pages → <https://skycontact.github.io/SimpleSGS/>
+
+> Pages 的 Source 需要是 **GitHub Actions**（工作流里用了 `configure-pages` 的
+> `enablement: true` 会自动开；如果失败就去 Settings → Pages 手动选一下）。
 
 ### 不开浏览器也能验证
 

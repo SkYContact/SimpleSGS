@@ -1,0 +1,101 @@
+name: Build wasm & deploy demo
+
+# 从源码编译 WebAssembly、跑一遍引擎测试，然后把 web/dist 发布到 GitHub Pages
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'web/**'
+      - 'data/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # emsdk 装一次很大（~700MB），缓存起来，后续构建就快了
+      - name: Cache emsdk
+        uses: actions/cache@v4
+        with:
+          path: ~/emsdk
+          key: emsdk-${{ runner.os }}-6.0.12
+
+      - name: Install emsdk
+        run: |
+          set -e
+          if [ ! -x "$HOME/emsdk/emsdk" ]; then
+            git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$HOME/emsdk"
+          fi
+          cd "$HOME/emsdk"
+          ./emsdk install 6.0.12
+          ./emsdk activate 6.0.12
+
+      # 参数与 web/build_web.bat 保持一致（必须 -O1，见 README 第七节）
+      - name: Build wasm
+        run: |
+          set -e
+          source "$HOME/emsdk/emsdk_env.sh"
+          em++ --version
+          em++ -O1 -std=c++17 -I src \
+            src/Types.cpp src/CardDatabase.cpp src/Room.cpp src/CardEffects.cpp src/AiAgent.cpp \
+            web/wasm_api.cpp \
+            --preload-file data/standard_cards.csv@data/standard_cards.csv \
+            --no-entry \
+            -sASYNCIFY=1 \
+            -sALLOW_MEMORY_GROWTH=1 \
+            -sMODULARIZE=1 \
+            -sEXPORT_NAME=createSgsModule \
+            -sENVIRONMENT=web,node \
+            -sSTACK_SIZE=1048576 \
+            -o web/dist/sgs.js
+          ls -l web/dist
+
+      # wasm 是 ENVIRONMENT=web,node 的，所以同一份产物能在 node 里直接跑测试
+      - name: Smoke test the wasm engine
+        run: |
+          set -e
+          node web/test_node.js spectate 2
+          node web/test_node.js human 1
+
+      - name: Build & regress the desktop version
+        run: |
+          set -e
+          g++ -std=c++17 -O2 -Isrc -o /tmp/sgs1v1 \
+            src/Types.cpp src/CardDatabase.cpp src/Room.cpp src/CardEffects.cpp \
+            src/AiAgent.cpp src/ConsoleAgent.cpp src/main.cpp
+          /tmp/sgs1v1 --games 100 --seed 7 --quiet | tail -6
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
