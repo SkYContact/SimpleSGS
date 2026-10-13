@@ -27,6 +27,7 @@ public:
             for (int c : a.cards) {
                 std::printf("%s ", room.cardLabel(c).c_str());
                 if (c == g_axeId) hasAxe = true;
+            if (c == ind && (g_fail = true)) std::printf("[FAIL] 候选包含判定区牌！");
             }
             std::printf("\n");
             if (hasAxe) { std::printf("[FAIL] 候选包含贯石斧自身！\n"); g_fail = true; }
@@ -84,6 +85,13 @@ int main() {
     };
     clearExtra(0, {slash, other1, other2});
     clearExtra(1, {jink});
+
+    // 判定区塞一张牌（乐不思蜀）——按规则不得作为贯石斧代价
+    int ind = -1;
+    for (size_t i = 0; i < deck.size(); ++i)
+        if (deck[i].name == CardName::Indulgence) { ind = static_cast<int>(i); break; }
+    room.removeCard(ind);
+    room.putJudgeCard(0, ind);
 
     room.runPlayPhase(0);   // P0 出杀 → P1 闪 → 贯石斧询问
     printf("%s (checked=%d)\n", AxeSpy::g_fail ? "FAIL" : (g_checked ? "PASS" : "未触发询问"),

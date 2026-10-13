@@ -486,8 +486,9 @@ void registerStandardCards(Room& room) {
         int owner = p.source;
         if (owner < 0 || !r.player(owner).alive) return true;
         if (!r.hasEquipNamed(owner, EquipSlot::Weapon, CardName::Axe)) return true;
-        std::vector<int> cands = r.allCardsOf(owner);
-        // 贯石斧自身不能作为代价弃掉（它是本技能的来源牌，且还在装备区）
+        // 代价牌口径：手牌 + 装备区（判定区的牌不可弃）；且不能弃贯石斧自身
+        std::vector<int> cands = r.handOf(owner);
+        for (int c : r.equipsOf(owner)) cands.push_back(c);
         int axeId = r.equipId(owner, EquipSlot::Weapon);
         cands.erase(std::remove(cands.begin(), cands.end(), axeId), cands.end());
         if (cands.size() < 2) return true;
