@@ -10,3 +10,12 @@ models/
 upstream.tgz
 audit_out.txt
 __pycache__/
+ai/
+ckpt/
+models/
+engines/
+dmp/
+run/
+repro/
+crash_out.txt
+o.txt

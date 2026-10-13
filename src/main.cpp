@@ -7,17 +7,12 @@
 #ifdef _WIN32
 #include <windows.h>
 #endif
-#include <crtdbg.h>
 
 #include "AiAgent.h"
 #include "CardDatabase.h"
 #include "CardEffects.h"
 #include "ConsoleAgent.h"
 #include "Room.h"
-#include "nn_agent.h"
-#include "sgs_farm.h"
-#include <inferfarm/farm.h>
-#include "record_agent.h"
 
 using namespace sgs;
 
@@ -31,18 +26,6 @@ struct Options {
     int maxTurns = 200;    // 防平局死循环
     std::string deck;      // 牌堆数据文件
     std::string bagua = "ask";   // 【八卦阵】发动方式：auto / ask / off（默认 ask＝正式规则）
-    std::string emit;      // 决策语料输出文件（SGSE 二进制格式）
-    std::string outcomes;  // 只记每局胜负（演化跑批用，'G'/seed 'E'/winner 极简格式）
-    bool farm = false;         // inferfarm 农场模式（批量自对弈）
-    int chains = 8;            // 农场链数
-    int banks = 2;             // 农场银行数
-    std::string model;         // 农场模型（--farm 用，=座位0/单模型）
-    std::string model1;        // 农场双组模式：座位1 模型（W2 组路由）
-    std::string backend = "ort";   // 农场推理后端：ort | trt
-    int slots = 64;            // 银行批形状（须与模型烤制的 fb 批一致）
-    int workers = 0;           // 农场工人数（0=物理核）
-    std::string nn[2];     // 各座位 ONNX 模型（空 = AiAgent 启发式）
-    std::string ort_dir = "C:/Users/41601/Miniconda3/envs/q35/Lib/site-packages/onnxruntime/capi";
     bool quiet = false;
 };
 
@@ -57,7 +40,6 @@ void usage() {
         "  --max-turns <N> 单局回合上限（默认 200）\n"
         "  --deck <path>   牌堆 csv 路径\n"
         "  --bagua <mode>  【八卦阵】发动方式：ask(默认，每次需要【闪】先问是否发动) / auto(没手牌闪才判) / off(从不)\n"
-        "  --emit <path>   录制决策语料到二进制文件（训练用，不改对局行为）\n"
         "  --quiet         不打印对局过程（跑批用）\n";
 }
 
@@ -65,69 +47,9 @@ bool matchArg(const char* a, const char* name) { return std::strcmp(a, name) == 
 
 }  // namespace
 
-typedef BOOL (WINAPI* MiniDumpWriteDump_t)(HANDLE, DWORD, HANDLE, int, void*, void*, void*);
-static void writeMinidump(EXCEPTION_POINTERS* ep) {
-    HMODULE dh = LoadLibraryA("dbghelp.dll");
-    if (!dh) return;
-    auto fn = (MiniDumpWriteDump_t)GetProcAddress(dh, "MiniDumpWriteDump");
-    if (!fn) return;
-    char path[260] = "sgs_crash.dmp";
-    if (const char* d = getenv("SGS_DMP_DIR")) { strncpy(path, d, 200); strcat(path, "\sgs_crash.dmp"); }
-    HANDLE f = CreateFileA(path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
-    if (f == INVALID_HANDLE_VALUE) return;
-    // MINIDUMP_EXCEPTION_INFORMATION 手摊（避免拉入 mdminwi 头）
-    struct MEI { unsigned long ThreadId; void* ExceptionPointers; int ClientPointers; };
-    EXCEPTION_POINTERS epv = *ep;
-    MEI mei = { GetCurrentThreadId(), &epv, 0 };
-    BOOL okd = fn(GetCurrentProcess(), GetCurrentProcessId(), f, 0 /*MiniDumpNormal*/,
-       &mei, nullptr, nullptr);
-    fprintf(stderr, "[dmp] write=%d gle=%lu path=%s\n", (int)okd, GetLastError(), path);
-    CloseHandle(f);
-}
-
-static LONG WINAPI crashHandler(EXCEPTION_POINTERS* ep) {
-    void* rip = (void*)ep->ContextRecord->Rip;
-    HMODULE mod = nullptr;
-    char base[260] = {0};
-    GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, (LPCSTR)rip, &mod);
-    uintptr_t off = mod ? (uintptr_t)rip - (uintptr_t)mod : 0;
-    if (mod) GetModuleFileNameA(mod, base, 260);
-    fprintf(stderr, "\n[crash] code=0x%lx rip=%p (mod %s +0x%zx) rw=%llu badaddr=%p rsp=%p\n",
-            (unsigned long)ep->ExceptionRecord->ExceptionCode, rip, base, (size_t)off,
-            (unsigned long long)ep->ExceptionRecord->ExceptionInformation[0],
-            (void*)ep->ExceptionRecord->ExceptionInformation[1],
-            (void*)ep->ContextRecord->Rsp);
-    // 栈顶返回地址链：定位 memcpy 类崩溃的真正调用方
-    unsigned long long rsp = ep->ContextRecord->Rsp;
-    for (int fi = 0; fi < 8; ++fi) {
-        unsigned long long ra = 0;
-        __try { ra = *(unsigned long long*)(rsp + fi * 8); }
-        __except (1) { break; }
-        HMODULE m2 = nullptr;
-        char b2[260] = {0};
-        if (ra > 0x10000 && GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
-                                               GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                                               (LPCSTR)ra, &m2)) {
-            char n2[260] = {0};
-            GetModuleFileNameA(m2, n2, 260);
-            char* nb = n2;
-            for (char* q = n2; *q; ++q) if (*q == 92 || *q == '/') nb = q + 1;
-            fprintf(stderr, "[crash] stk[%d]=%p %s+0x%zx\n", fi, (void*)ra, nb,
-                    (size_t)(ra - (unsigned long long)m2));
-        }
-    }
-    fflush(stderr);
-    writeMinidump(ep);
-    return EXCEPTION_CONTINUE_SEARCH;
-}
-
 int main(int argc, char** argv) {
 #ifdef _WIN32
     SetConsoleOutputCP(CP_UTF8);
-#endif
-    AddVectoredExceptionHandler(0, crashHandler);
-#ifdef _DEBUG
-    _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_CHECK_ALWAYS_DF | _CRTDBG_DELAY_FREE_MEM_DF);
 #endif
     Options opt;
     for (int i = 1; i < argc; ++i) {
@@ -148,32 +70,6 @@ int main(int argc, char** argv) {
             opt.deck = argv[++i];
         } else if (matchArg(argv[i], "--bagua") && i + 1 < argc) {
             opt.bagua = argv[++i];
-        } else if (matchArg(argv[i], "--nn0") && i + 1 < argc) {
-            opt.nn[0] = argv[++i];
-        } else if (matchArg(argv[i], "--nn1") && i + 1 < argc) {
-            opt.nn[1] = argv[++i];
-        } else if (matchArg(argv[i], "--farm")) {
-            opt.farm = true;
-        } else if (matchArg(argv[i], "--model") && i + 1 < argc) {
-            opt.model = argv[++i];
-        } else if (matchArg(argv[i], "--workers") && i + 1 < argc) {
-            opt.workers = std::atoi(argv[++i]);
-        } else if (matchArg(argv[i], "--slots") && i + 1 < argc) {
-            opt.slots = std::atoi(argv[++i]);
-        } else if (matchArg(argv[i], "--backend") && i + 1 < argc) {
-            opt.backend = argv[++i];
-        } else if (matchArg(argv[i], "--model1") && i + 1 < argc) {
-            opt.model1 = argv[++i];
-        } else if (matchArg(argv[i], "--chains") && i + 1 < argc) {
-            opt.chains = std::atoi(argv[++i]);
-        } else if (matchArg(argv[i], "--banks") && i + 1 < argc) {
-            opt.banks = std::atoi(argv[++i]);
-        } else if (matchArg(argv[i], "--ort-dir") && i + 1 < argc) {
-            opt.ort_dir = argv[++i];
-        } else if (matchArg(argv[i], "--outcomes") && i + 1 < argc) {
-            opt.outcomes = argv[++i];
-        } else if (matchArg(argv[i], "--emit") && i + 1 < argc) {
-            opt.emit = argv[++i];
         } else if (matchArg(argv[i], "--quiet")) {
             opt.quiet = true;
         } else {
@@ -210,31 +106,8 @@ int main(int argc, char** argv) {
             std::cout << "你是座位 " << opt.human << "，输入数字选择，0 或 q 表示放弃。\n";
         }
     }
-    registerCardVocab(deck);
-
-    if (opt.farm) {
-        if (opt.model.empty()) { std::cout << "--farm 需要 --model <onnx>\n"; return 1; }
-        sgs_farm_run(deck, opt.model, opt.model1, opt.ort_dir, opt.chains, opt.games,
-                     opt.seed, opt.banks, opt.hp, opt.maxTurns, opt.bagua, opt.backend,
-                     opt.slots);
-        return 0;
-    }
 
     int win0 = 0, win1 = 0, draw = 0, totalTurns = 0;
-
-    FILE* outf = nullptr;
-    if (!opt.outcomes.empty()) {
-        outf = fopen(opt.outcomes.c_str(), "wb");
-        if (!outf) { std::cout << "outcomes 文件打开失败: " << opt.outcomes << "\n"; return 1; }
-    }
-    std::unique_ptr<Emitter> emitter;
-    if (!opt.emit.empty()) {
-        emitter = std::make_unique<Emitter>(deck, opt.emit);
-        if (!emitter->ok()) {
-            std::cout << "emit 文件打开失败: " << opt.emit << "\n";
-            return 1;
-        }
-    }
 
     for (int g = 0; g < opt.games; ++g) {
         // 单局默认打印完整过程；跑批/多局只打印结果
@@ -253,37 +126,11 @@ int main(int argc, char** argv) {
                                        : std::unique_ptr<Agent>(new AiAgent("先手AI"));
         std::unique_ptr<Agent> a1 = h1 ? std::unique_ptr<Agent>(new ConsoleAgent("你"))
                                        : std::unique_ptr<Agent>(new AiAgent("后手AI"));
-        if (!h0 && !opt.nn[0].empty()) {
-            auto m = NNAgent::create(opt.nn[0], opt.ort_dir, "NN先手");
-            if (!m) return 2;
-            a0 = std::move(m);
-        }
-        if (!h1 && !opt.nn[1].empty()) {
-            auto m = NNAgent::create(opt.nn[1], opt.ort_dir, "NN后手");
-            if (!m) return 2;
-            a1 = std::move(m);
-        }
-        // 录制包装：内层先决策、外层只记录，不改行为（同种子对局逐位一致）
-        if (emitter) {
-            emitter->gameStart(opt.seed + static_cast<unsigned>(g) * 7919u);
-            a0 = std::make_unique<RecordingAgent>(std::move(a0), emitter.get(), 0);
-            a1 = std::make_unique<RecordingAgent>(std::move(a1), emitter.get(), 1);
-        }
 
         room.setupPlayer(0, h0 ? "你" : "先手方", true, opt.hp, std::move(a0));
         room.setupPlayer(1, h1 ? "你" : "后手方", false, opt.hp, std::move(a1));
 
         int w = room.run();
-        if (emitter) emitter->gameEnd(w);
-        if (outf) {
-            unsigned sd = opt.seed + static_cast<unsigned>(g) * 7919u;
-            fwrite("G", 1, 1, outf);
-            fwrite(&sd, sizeof(sd), 1, outf);
-            char t = 'E';
-            int ww = w;
-            fwrite(&t, 1, 1, outf);
-            fwrite(&ww, sizeof(ww), 1, outf);
-        }
         totalTurns += room.turnCount();
 
         if (opt.games > 1) {
