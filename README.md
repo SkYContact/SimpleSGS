@@ -6,7 +6,7 @@
 
 同一份 C++ 内核既能在命令行跑，也能用 Emscripten 编成 WebAssembly 在浏览器里玩（见第七节）。
 
-[![Build wasm & deploy demo](https://github.com/SkYContact/SimpleSGS/actions/workflows/pages.yml/badge.svg)](https://github.com/SkYContact/SimpleSGS/actions/workflows/pages.yml)
+[![Build wasm & deploy demo](https://github.com/SkYContact/SimpleSGS/actions/workflows/pages.yml/badge.svg?branch=main)](https://github.com/SkYContact/SimpleSGS/actions/workflows/pages.yml)
 
 * 仓库：<https://github.com/SkYContact/SimpleSGS>
 * **在线试玩**：<https://skycontact.github.io/SimpleSGS/>（CI 从源码编 wasm 后自动发布）
