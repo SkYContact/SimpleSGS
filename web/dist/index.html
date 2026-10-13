@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>三国杀 1v1 · C++ → WebAssembly</title>
+<link rel="stylesheet" href="style.css?v=2">
+</head>
+<body>
+
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">杀</span>
+      <div>
+        <h1>三国杀 1v1</h1>
+        <p>无武将 · 标准版牌堆 · C++ 编译成 WebAssembly</p>
+      </div>
+    </div>
+    <div class="status">
+      <div class="pill" id="turnInfo">第 0 回合</div>
+      <div class="pill" id="deckInfo">牌堆 —</div>
+      <div class="pill" id="whoInfo">—</div>
+    </div>
+    <div class="controls">
+      <label class="speed">
+        速度
+        <input id="speed" type="range" min="0" max="1200" step="100" value="260">
+        <span id="speedVal">260ms</span>
+      </label>
+      <button id="restart" class="btn ghost" disabled>重新开始</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="table">
+      <div class="seat" id="foeSide"></div>
+      <div class="versus"><span>VS</span></div>
+      <div class="seat" id="meSide"></div>
+      <div class="legend">
+        牌名后面的标记：
+        <b>+1马</b>（防守马，别人算你更远）·
+        <b>-1马</b>（进攻马，你算别人更近）·
+        <b>射程N</b>（武器的攻击范围）　|　
+        距离 = 座位距离 + 对方防守马 − 你的进攻马
+      </div>
+    </section>
+
+    <aside class="side-panel">
+      <div class="panel-head">
+        <span>对局记录</span>
+        <button id="clearLog" class="btn tiny">清空</button>
+      </div>
+      <div id="log" class="log"></div>
+    </aside>
+  </main>
+
+  <footer class="actionbar" id="actionBar">
+    <div class="waiting" id="waiting">选择一种开局方式…</div>
+  </footer>
+</div>
+
+<!-- 开局遮罩 -->
+<div class="cover" id="cover">
+  <div class="cover-card">
+    <h2>三国杀 1v1</h2>
+    <p class="sub">C++ 规则内核 → Emscripten → WebAssembly，在浏览器里跑真实结算</p>
+    <div class="cover-actions">
+      <button class="btn primary big" data-start="0">人机对战 · 你执先手</button>
+      <button class="btn big" data-start="1">人机对战 · 你执后手</button>
+      <button class="btn big" data-start="-1">AI 观战（我只看）</button>
+    </div>
+    <div class="cover-meta">
+      <label>随机种子 <input id="seedInput" type="number" min="1" max="2147483646" value="1"></label>
+      <button class="btn tiny" id="reseed" title="换一个随机种子">🎲 换一个</button>
+      <span class="hint">刷新/重开都会换新种子；同一种子 = 同样的牌堆顺序</span>
+    </div>
+    <p class="cover-foot" id="loadState">正在加载 wasm…</p>
+  </div>
+</div>
+
+<script src="sgs.js"></script>
+<script src="app.js?v=2"></script>
+</body>
+</html>

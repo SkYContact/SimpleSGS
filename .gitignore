@@ -1,0 +1,28 @@
+# 本地编译产物
+build/
+build_msvc/
+*.obj
+*.exe
+*.pdb
+*.ilk
+*.exp
+*.lib
+
+# 临时文件 / 日志
+*.log
+chk.txt
+regress.txt
+
+# 编辑器 / 工具
+.vs/
+.vscode/
+.idea/
+node_modules/
+.playwright-cli/
+
+# 说明：web/dist 里的 sgs.js / sgs.wasm / sgs.data 是编译产物，但故意提交，
+# 这样克隆下来可以直接起个静态服务器跑（也方便挂 GitHub Pages）。
+# 想改成不提交，把下面三行取消注释即可。
+# web/dist/sgs.js
+# web/dist/sgs.wasm
+# web/dist/sgs.data
