@@ -21,7 +21,7 @@ const distDir = path.join(__dirname, 'dist');
 process.chdir(distDir);                            // .wasm/.data 按 cwd 找
 const factory = require(path.join(distDir, 'sgs.js'));
 
-let logs = 0, asks = 0, states = 0, finished = 0;
+let logs = 0, asks = 0, states = 0, finished = 0, leaks = 0;
 let g = 0, lastState = null, mod = null;
 let watchdog = null;
 
@@ -33,6 +33,9 @@ function resetGlobals() {
 
   globalThis.sgsOnLog = (s) => {
     logs++;
+    // 内核自己会做"牌数守恒"自检：任何效果把牌吃掉都会打这行，测试直接判失败。
+    // （五谷丰登亮牌曾经用 Area::None，选牌被 moveCards 静默跳过、剩余亮牌也丢了）
+    if (s.includes('牌数守恒检查失败')) leaks++;
     if (speed > 0 && /^===/.test(s)) console.log(s);
   };
   globalThis.sgsOnState = (json) => { states++; lastState = JSON.parse(json); };
@@ -69,9 +72,11 @@ function startOne() {
 
 function finish() {
   if (watchdog) clearTimeout(watchdog);
-  console.log(`\n汇总: ${games} 局, 完成回调 ${finished} 次`);
-  console.log(finished === games ? '✅ 通过' : '❌ 异常');
-  process.exit(finished === games ? 0 : 1);
+  console.log(`\n汇总: ${games} 局, 完成回调 ${finished} 次, 丢牌告警 ${leaks} 次`);
+  const ok = finished === games && leaks === 0;
+  if (leaks) console.log('❌ 有牌被效果吃掉了（牌数守恒自检报警）');
+  console.log(ok ? '✅ 通过' : '❌ 异常');
+  process.exit(ok ? 0 : 1);
 }
 
 factory().then((m) => {

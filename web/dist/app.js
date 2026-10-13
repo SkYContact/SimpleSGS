@@ -274,8 +274,11 @@ function startGame(humanSeat) {
   $('actionBar').innerHTML = '<div class="waiting">开局中…</div>';
 
   const seed = parseInt($('seedInput').value || '1', 10) || 1;
+  // 【八卦阵】发动方式：0 自动 / 1 每次询问 / 2 关闭
+  // 开局值传给 wasm；之后在「设置」里改会走 window.sgsBaguaMode，C++ 每次判定时现读
+  const bagua = Number(window.sgsBaguaMode || 0);
   // 这一句会一直跑到本局结束（需要玩家决策时会挂起等页面）
-  S.module._sgs_start(seed, humanSeat, 4);
+  S.module._sgs_start(seed, humanSeat, 4, bagua);
 }
 
 // 随机种子：每次刷新换一个，免得每局牌堆都一样；想复现就把它抄下来
@@ -295,6 +298,27 @@ function bindUi() {
   setRandomSeed();
   const reroll = $('reseed');
   if (reroll) reroll.onclick = setRandomSeed;
+
+  // ---- 设置面板（对局中也能改）----
+  const sBtn = $('settingsBtn');
+  const sPanel = $('settingsPanel');
+  if (sBtn && sPanel) {
+    sBtn.onclick = (e) => { if (e && e.stopPropagation) e.stopPropagation(); sPanel.classList.toggle('open'); };
+    sPanel.onclick = (e) => { if (e && e.stopPropagation) e.stopPropagation(); };
+    document.addEventListener('click', () => sPanel.classList.remove('open'));
+  }
+  const bagua = $('baguaSelect');
+  if (bagua) {
+    // 写进全局变量即可：C++ 在"需要判定【八卦阵】"的那一刻现读，所以随时改都生效
+    const applyBagua = () => {
+      window.sgsBaguaMode = Number(bagua.value) || 0;
+      const text = bagua.options && bagua.selectedIndex >= 0
+        ? bagua.options[bagua.selectedIndex].text : bagua.value;
+      logLine(`  [设置] 【八卦阵】发动方式 → ${text}`);
+    };
+    bagua.onchange = applyBagua;
+    window.sgsBaguaMode = Number(bagua.value) || 0;
+  }
   $('speed').oninput = (e) => {
     window.sgsSpeedMs = Number(e.target.value);
     $('speedVal').textContent = `${e.target.value}ms`;

@@ -11,7 +11,15 @@ enum class CardType { Basic, Trick, DelayedTrick, Equip };
 enum class EquipSlot { None = -1, Weapon = 0, Armor = 1, DefensiveHorse = 2, OffensiveHorse = 3 };
 enum class Phase { None = 0, RoundStart, Judge, Draw, Play, Discard, RoundEnd };
 enum class DamageNature { Normal = 0, Fire, Thunder };
-enum class Area { None = 0, Hand, Equip, Judge, DrawPile, DiscardPile };
+// None = 离场/结算中（尚未归位，移动牌时会跳过）；Revealed = 亮出的公共牌（如【五谷丰登】）
+enum class Area { None = 0, Hand, Equip, Judge, DrawPile, DiscardPile, Revealed };
+
+// 【八卦阵】的发动方式
+enum class EightDiagramMode {
+    Auto = 0,  // 手上没有【闪】时自动判定（默认，省事）
+    Ask,       // 每次需要【闪】都询问玩家是否发动（正式规则：先判定，失败仍可打出手牌【闪】）
+    Off        // 从不发动
+};
 
 // 单回合【杀】的使用次数上限（无武将、无技能时的基础值）
 constexpr int kBaseSlashLimit = 1;
@@ -113,6 +121,10 @@ const char* natureName(DamageNature n);
 
 bool isRed(Suit s);
 bool isBlack(Suit s);
+
+const char* eightDiagramModeName(EightDiagramMode m);            // 自动 / 询问 / 关闭
+bool parseEightDiagramMode(const std::string& s, EightDiagramMode& out);  // auto/ask/off 或 中文
+EightDiagramMode eightDiagramModeFromInt(int v);                 // 0/1/2 -> 自动/询问/关闭
 
 std::string cardLabel(const CardProto& proto, bool virtualCard = false);
 std::string rankLabel(int rank);

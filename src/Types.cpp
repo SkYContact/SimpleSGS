@@ -53,6 +53,7 @@ const char* areaName(Area a) {
         case Area::Judge: return "判定区";
         case Area::DrawPile: return "牌堆";
         case Area::DiscardPile: return "弃牌堆";
+        case Area::Revealed: return "亮牌区";
         default: return "离场";
     }
 }
@@ -67,6 +68,27 @@ const char* natureName(DamageNature n) {
 
 bool isRed(Suit s) { return s == Suit::Heart || s == Suit::Diamond; }
 bool isBlack(Suit s) { return s == Suit::Spade || s == Suit::Club; }
+
+const char* eightDiagramModeName(EightDiagramMode m) {
+    switch (m) {
+        case EightDiagramMode::Ask: return "询问";
+        case EightDiagramMode::Off: return "关闭";
+        default: return "自动";
+    }
+}
+
+EightDiagramMode eightDiagramModeFromInt(int v) {
+    if (v == 1) return EightDiagramMode::Ask;
+    if (v == 2) return EightDiagramMode::Off;
+    return EightDiagramMode::Auto;
+}
+
+bool parseEightDiagramMode(const std::string& s, EightDiagramMode& out) {
+    if (s == "auto" || s == "自动" || s == "0") { out = EightDiagramMode::Auto; return true; }
+    if (s == "ask" || s == "询问" || s == "1") { out = EightDiagramMode::Ask; return true; }
+    if (s == "off" || s == "关闭" || s == "none" || s == "2") { out = EightDiagramMode::Off; return true; }
+    return false;
+}
 
 std::string rankLabel(int rank) {
     switch (rank) {

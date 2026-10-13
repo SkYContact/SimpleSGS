@@ -13,6 +13,12 @@ build_msvc/
 chk.txt
 regress.txt
 
+# 排查/回归时随手生成的临时脚本与输出（别提交进仓库）
+/bg_*.txt
+/bg_test.bat
+/run_seeds.bat
+/chk.txt
+
 # 抓 GitHub 页面/徽章做排查时留下的临时文件
 /badge.svg
 /b.svg

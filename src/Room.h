@@ -112,10 +112,20 @@ public:
     std::mt19937& rng() { return rng_; }
     void setMaxTurns(int n) { maxTurns_ = n; }
     void setSilent(bool s) { silent_ = s; }  // 跑批/网页时不打印到 stdout
+    // 【八卦阵】发动方式（默认自动：没手牌【闪】时才判定）
+    void setEightDiagramMode(EightDiagramMode m) { eightDiagramMode_ = m; }
+    // 动态来源：网页上"设置"里可以随时改。设了它就以它为准（返回 0/1/2）。
+    // 为什么用回调而不是直接调 setter：wasm 挂起等玩家点击时不能反调进 wasm，
+    // 所以由 JS 写全局变量、C++ 在需要判定的那一刻现读。
+    void setEightDiagramModeProvider(std::function<int()> f) { baguaModeProvider_ = std::move(f); }
+    EightDiagramMode eightDiagramMode() const;
     // 日志外送（WebAssembly / 录像 / 网络都用它）
     void setLogSink(std::function<void(const std::string&)> fn) { logSink_ = std::move(fn); }
     int drawPileSize() const { return static_cast<int>(drawPile_.size()); }
     int discardPileSize() const { return static_cast<int>(discardPile_.size()); }
+    // 牌数守恒自检：所有区域的牌加起来应该等于整副牌（少了就说明有牌被"吃掉"了）
+    int totalCardsTracked() const;
+    int deckSize() const { return static_cast<int>(cards_.size()); }
 
 private:
     void shuffle(std::vector<int>& pile);
@@ -128,6 +138,7 @@ private:
     std::vector<CardLoc> loc_;
     std::vector<int> drawPile_;
     std::vector<int> discardPile_;
+    std::vector<int> revealedPile_;  // 亮牌区（五谷丰登等）
     std::vector<std::shared_ptr<Trigger>> triggers_;
     std::vector<std::string> log_;
     std::mt19937 rng_;
@@ -136,6 +147,8 @@ private:
     int winner_ = -1;   // -1 未结束；-2 平局；>=0 获胜者
     int maxTurns_ = 200;
     bool silent_ = false;
+    EightDiagramMode eightDiagramMode_ = EightDiagramMode::Auto;
+    std::function<int()> baguaModeProvider_;
     std::function<void(const std::string&)> logSink_;
 };
 

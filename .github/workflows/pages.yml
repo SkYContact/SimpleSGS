@@ -68,8 +68,8 @@ jobs:
       - name: Smoke test the wasm engine
         run: |
           set -e
-          node web/test_node.js spectate 2
-          node web/test_node.js human 1
+          node web/test_node.js spectate 6     # 内含"牌数守恒"告警断言
+          node web/test_node.js human 1        # 验证 Asyncify 挂起/唤醒链路
 
       - name: Build & regress the desktop version
         run: |
@@ -77,7 +77,13 @@ jobs:
           g++ -std=c++17 -O2 -Isrc -o /tmp/sgs1v1 \
             src/Types.cpp src/CardDatabase.cpp src/Room.cpp src/CardEffects.cpp \
             src/AiAgent.cpp src/ConsoleAgent.cpp src/main.cpp
-          /tmp/sgs1v1 --games 100 --seed 7 --quiet | tail -6
+          /tmp/sgs1v1 --games 100 --seed 7 --quiet > /tmp/regress.txt 2>&1
+          tail -6 /tmp/regress.txt
+          # 内核自带的"牌数守恒"检查：任何效果把牌吃掉都会打这行告警，这里直接判失败
+          if grep -q '牌数守恒检查失败' /tmp/regress.txt; then
+            echo "::error::有牌被效果吃掉了，见上面的告警行"
+            exit 1
+          fi
 
       # 注意：这里不用 enablement:true —— GITHUB_TOKEN 没有权限通过 REST API
       # 创建 Pages 站点（会报 "Resource not accessible by integration"）。

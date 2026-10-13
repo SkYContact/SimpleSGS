@@ -41,6 +41,12 @@ std::string Room::playerName(int id) const {
     return players_[id]->name;
 }
 
+// 【八卦阵】发动方式：有动态来源（网页设置）就现读，否则用静态设置
+EightDiagramMode Room::eightDiagramMode() const {
+    if (baguaModeProvider_) return eightDiagramModeFromInt(baguaModeProvider_());
+    return eightDiagramMode_;
+}
+
 // ============================================================ 查询
 
 std::vector<int> Room::alivePlayers() const {
@@ -154,6 +160,7 @@ void Room::removeCard(int cardId) {
         case Area::Judge: eraseValue(players_[l.owner]->judgeZone, cardId); break;
         case Area::DrawPile: eraseValue(drawPile_, cardId); break;
         case Area::DiscardPile: eraseValue(discardPile_, cardId); break;
+        case Area::Revealed: eraseValue(revealedPile_, cardId); break;
         default: break;
     }
     l.area = Area::None;
@@ -175,8 +182,22 @@ void Room::addCard(int cardId, int owner, Area area) {
         case Area::Judge: players_[owner]->judgeZone.push_back(cardId); break;
         case Area::DrawPile: drawPile_.push_back(cardId); break;
         case Area::DiscardPile: discardPile_.push_back(cardId); break;
+        case Area::Revealed: revealedPile_.push_back(cardId); break;
         default: break;
     }
+}
+
+// 所有区域里的牌数（不含结算中离场的牌）——用来做"牌数守恒"自检
+int Room::totalCardsTracked() const {
+    int n = static_cast<int>(drawPile_.size() + discardPile_.size() + revealedPile_.size());
+    for (auto& p : players_) {
+        n += p->handCount();
+        for (int i = 0; i < 4; ++i) {
+            if (p->equip[i] >= 0) ++n;
+        }
+        n += static_cast<int>(p->judgeZone.size());
+    }
+    return n;
 }
 
 void Room::moveCards(const std::vector<int>& ids, int toOwner, Area toArea,
@@ -227,6 +248,9 @@ std::vector<int> Room::drawCards(int who, int n) {
     return out;
 }
 
+// 亮出的牌放进"亮牌区"（而不是 Area::None）：
+// 一是它们仍然属于场上（牌数守恒），二是 moveCards 会跳过 Area::None 的牌，
+// 用 None 会导致"选中的牌送不进手里"这种静默 bug。
 std::vector<int> Room::revealCards(int n) {
     std::vector<int> out;
     for (int i = 0; i < n; ++i) {
@@ -234,8 +258,7 @@ std::vector<int> Room::revealCards(int n) {
         if (drawPile_.empty()) break;
         int c = drawPile_.back();
         drawPile_.pop_back();
-        loc_[c].area = Area::None;  // 亮出后暂离所有区域
-        loc_[c].owner = -1;
+        addCard(c, -1, Area::Revealed);
         out.push_back(c);
     }
     return out;
@@ -973,6 +996,19 @@ int Room::run() {
         chat(str("=== 游戏结束：", playerName(winner_), " 获胜（共 ", turn_, " 回合）==="));
     } else {
         chat(str("=== 游戏结束：平局（共 ", turn_, " 回合）==="));
+    }
+
+    // 收尾自检：这时候不该有任何牌还停在"结算中"，所有牌都必须落在某个区域里。
+    // 这条告警必须"静默模式下也能看到"（--quiet 跑批/CI 要靠它抓丢牌），
+    // 所以除了 chat（会写日志、外送 sink）之外再单独写一次 stderr。
+    int tracked = totalCardsTracked();
+    if (tracked != deckSize()) {
+        std::string warn = str("  ⚠ 牌数守恒检查失败：场上 ", tracked, " / 整副 ", deckSize(),
+                               "（有 ", deckSize() - tracked, " 张牌被效果吃掉了）");
+        chat(warn);
+        log_.push_back(warn);
+        if (logSink_) logSink_(warn);
+        std::cerr << warn << std::endl;
     }
     return winner_;
 }

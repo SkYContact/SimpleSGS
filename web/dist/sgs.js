@@ -40,7 +40,7 @@ var ENVIRONMENT_IS_SHELL = !ENVIRONMENT_IS_WEB && !ENVIRONMENT_IS_NODE && !ENVIR
 
 // --pre-jses are emitted after the Module integration code, so that they can
 // refer to Module (if they choose; they can also define Module)
-// include: C:\Users\Administrator\AppData\Local\Temp\tmp40i91voa.js
+// include: C:\Users\Administrator\AppData\Local\Temp\tmpantc6339.js
 
   if (!Module['expectedDataFileDownloads']) Module['expectedDataFileDownloads'] = 0;
   Module['expectedDataFileDownloads']++;
@@ -168,7 +168,7 @@ Module['FS_createPath']("/", "data", true, true);
 
   })();
 
-// end include: C:\Users\Administrator\AppData\Local\Temp\tmp40i91voa.js
+// end include: C:\Users\Administrator\AppData\Local\Temp\tmpantc6339.js
 
 
 var programArgs = [];
@@ -4195,6 +4195,7 @@ function js_answer_targets(buf,len) { var s = (globalThis.sgsAnswer && globalThi
 function js_answer_clear() { globalThis.sgsAnswer = { ready: false, option: -1, cards: [], targets: [] }; }
 function js_speed_ms() { return globalThis.sgsSpeedMs | 0; }
 function js_auto_play() { return globalThis.sgsAutoPlay ? 1 : 0; }
+function js_bagua_mode() { return globalThis.sgsBaguaMode | 0; }
 
 // Imports from the Wasm binary.
 var _sgs_start,
@@ -4314,6 +4315,8 @@ var wasmImports = {
   js_ask,
   /** @export */
   js_auto_play,
+  /** @export */
+  js_bagua_mode,
   /** @export */
   js_done,
   /** @export */

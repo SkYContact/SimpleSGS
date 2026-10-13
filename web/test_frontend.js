@@ -196,6 +196,21 @@ setTimeout(() => {
   }
   box.value = '424242';        // 固定一个种子，验证能复现
   globalThis.sgsSpeedMs = 0;   // 关掉 AI 的播放节奏（页面默认 260ms/步，测试不需要）
+  // 设置面板：八卦阵改「每次询问」，验证"对局中随时改"这条链路（会覆盖到新的 option 询问）
+  const sBtn = $id('settingsBtn');
+  const sPanel = $id('settingsPanel');
+  const bagua = $id('baguaSelect');
+  if (!sBtn || !sPanel || !bagua) errors.push('设置面板元素缺失');
+  else {
+    sBtn.onclick();                                   // 打开面板
+    if (!sPanel.classList.contains('open')) errors.push('点设置按钮没打开面板');
+    bagua.value = '1';
+    if (!bagua.onchange) errors.push('baguaSelect 没绑 onchange');
+    else bagua.onchange();
+    if (Number(globalThis.sgsBaguaMode) !== 1) {
+      errors.push('改设置没写进全局变量 sgsBaguaMode=' + globalThis.sgsBaguaMode);
+    }
+  }
 
   const btn = startButtons.find((b) => b.dataset.start === '0');
   if (!btn || !btn.onclick) { console.log('❌ 没绑定开局按钮'); process.exit(1); }

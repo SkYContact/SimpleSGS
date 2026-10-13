@@ -126,6 +126,11 @@ AskResult AiAgent::askOption(Room& room, const Ask& a) {
         r.option = a.options.empty() ? -1 : 0;
         return r;
     }
+    if (a.tag == "EightDiagram") {
+        // 判定基本是白嫖：成功省一张手牌【闪】，失败也还能拿手牌【闪】兜底
+        r.option = 0;
+        return r;
+    }
     if (a.tag != "Play") {
         r.option = a.options.empty() ? -1 : 0;
         return r;

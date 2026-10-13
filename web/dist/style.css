@@ -278,6 +278,37 @@ main {
 .ask-target.sel { border-color: var(--gold); background: rgba(216,180,81,.2); }
 .ask-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 
+/* ---------------------------------------------------------------- 设置面板 */
+.settings-wrap { position: relative; }
+.settings-panel {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: 300px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--panel-line);
+  background: linear-gradient(180deg, rgba(20, 52, 42, .98), rgba(10, 26, 20, .98));
+  box-shadow: var(--shadow);
+  z-index: 30;
+  text-align: left;
+}
+.settings-panel.open { display: block; }
+.settings-panel h4 { margin: 0 0 10px; font-size: 13px; color: var(--gold); letter-spacing: 1px; }
+.setting-row { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--ink); }
+.setting-row select {
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--panel-line);
+  background: rgba(0,0,0,.35);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 12.5px;
+}
+.setting-row select option { background: #14342a; color: var(--ink); }
+.setting-hint { margin: 10px 0 0; font-size: 11.5px; line-height: 1.65; color: var(--ink-dim); }
+
 /* ---------------------------------------------------------------- 遮罩 */
 .cover {
   position: fixed; inset: 0;
@@ -301,6 +332,16 @@ main {
 .cover-actions { display: flex; flex-direction: column; gap: 10px; }
 .cover-meta { margin-top: 20px; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 12px; color: var(--ink-dim); flex-wrap: wrap; }
 .cover-meta input { width: 110px; padding: 5px 8px; border-radius: 8px; border: 1px solid var(--panel-line); background: rgba(0,0,0,.3); color: var(--ink); font-family: inherit; }
+.cover-meta select {
+  padding: 5px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--panel-line);
+  background: rgba(0,0,0,.3);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 12px;
+}
+.cover-meta select option { background: #14342a; color: var(--ink); }
 .cover-foot { margin: 18px 0 0; font-size: 12px; color: var(--ink-dim); min-height: 18px; }
 
 .result-banner {

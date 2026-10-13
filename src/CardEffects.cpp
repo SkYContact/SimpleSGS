@@ -10,9 +10,29 @@ namespace sgs {
 
 static bool nameIs(const CardProto& p, const char* n) { return p.name == n; }
 
+// 按座次顺序列出存活角色，从 who 开始（afterUser=true 则从 who 的下家开始）。
+// 五谷丰登这类"所有人依次选"的牌，顺序会影响公平性：正式规则是【从使用者开始】。
+static std::vector<int> aliveFrom(Room& room, int who, bool afterUser) {
+    std::vector<int> alive = room.alivePlayers();  // 已按座位升序
+    if (alive.empty()) return {};
+    int idx = 0;
+    for (size_t i = 0; i < alive.size(); ++i) {
+        if (alive[i] == who) {
+            idx = static_cast<int>(i);
+            break;
+        }
+    }
+    if (afterUser) idx = (idx + 1) % static_cast<int>(alive.size());
+    std::vector<int> out;
+    for (size_t i = 0; i < alive.size(); ++i) {
+        out.push_back(alive[(idx + i) % alive.size()]);
+    }
+    return out;
+}
+
 static std::vector<int> otherAlive(Room& room, int who) {
     std::vector<int> out;
-    for (int t : room.alivePlayers()) {
+    for (int t : aliveFrom(room, who, true)) {  // 从下家开始
         if (t != who) out.push_back(t);
     }
     return out;
@@ -117,13 +137,17 @@ bool cardUsableNow(Room& room, int who, const CardProto& proto, int cardId,
         outMin = outMax = 1;
         return true;
     }
-    if (n == CardName::PeachGarden || n == CardName::Harvest) {
-        outCandidates = room.alivePlayers();
+    // 多目标锦囊的【目标顺序 = 结算顺序】，必须按"从使用者开始沿座次"排，
+    // 不能直接用 alivePlayers()（那是座位顺序 0,1,…，使用者可能排在后面）：
+    //   五谷丰登  -> 使用者先挑牌
+    //   桃园结义/南蛮入侵/万箭齐发 -> 从使用者的下家开始依次结算
+    if (n == CardName::Harvest || n == CardName::PeachGarden) {
+        outCandidates = aliveFrom(room, who, false);  // 使用者排第一
         outMin = outMax = static_cast<int>(outCandidates.size());
         return !outCandidates.empty();
     }
     if (n == CardName::BarbarianInvasion || n == CardName::ArrowBarrage) {
-        outCandidates = otherAlive(room, who);
+        outCandidates = otherAlive(room, who);        // 从下家开始，不含自己
         outMin = outMax = static_cast<int>(outCandidates.size());
         return !outCandidates.empty();
     }
@@ -412,17 +436,36 @@ void applyCardEffect(Room& room, CardUseStruct& use, int target) {
 // ============================================================ 装备技能（事件注册）
 
 void registerStandardCards(Room& room) {
-    // ---- 八卦阵：需要【闪】且手上没有【闪】时，判定为红色则视为打出【闪】
+    // ---- 八卦阵：需要【闪】时判定，红色则视为打出【闪】
+    //      发动方式由 Room::setEightDiagramMode 决定：Auto（默认，没手牌闪才判）/ Ask / Off
     room.registerTrigger("EightDiagram", Event::AskForCard, -1, 0, [](Room& r, TriggerParams& p) {
         if (p.askName != CardName::Jink) return true;
         if (!r.player(p.who).alive) return true;
-        if (!p.askCandidates.empty()) return true;  // 有实体【闪】优先用手牌
         if (!r.hasEquipNamed(p.who, EquipSlot::Armor, CardName::EightDiagram)) return true;
         if (p.source >= 0 &&
             r.hasEquipNamed(p.source, EquipSlot::Weapon, CardName::QinggangSword)) {
             r.chat("  【青釭剑】无视【八卦阵】");
             return true;
         }
+
+        const EightDiagramMode mode = r.eightDiagramMode();
+        const bool hasJink = !p.askCandidates.empty();
+        if (mode == EightDiagramMode::Off) return true;
+        if (mode == EightDiagramMode::Auto && hasJink) return true;  // 有实体【闪】就直接用手牌
+
+        if (mode == EightDiagramMode::Ask) {
+            Ask a;
+            a.kind = AskKind::Option;
+            a.tag = "EightDiagram";
+            a.who = p.who;
+            a.subject = p.source;
+            a.options = {"发动【八卦阵】判定", "不发动"};
+            a.prompt = str("【八卦阵】：是否发动判定？（红色则视为打出【闪】",
+                           hasJink ? "，判定失败仍可打出手牌【闪】" : "，失败就只能挨打", "）");
+            AskResult res = r.askAgent(a);
+            if (res.option != 0) return true;
+        }
+
         int jc = r.judge(p.who, "八卦阵");
         if (jc >= 0 && isRed(r.card(jc).proto.suit)) {
             r.chat(str("  ", r.playerName(p.who), " 的【八卦阵】判定为红色，视为打出了【闪】"));

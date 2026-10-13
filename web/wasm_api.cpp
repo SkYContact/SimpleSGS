@@ -61,6 +61,10 @@ EM_JS(int, js_speed_ms, (), {
 EM_JS(int, js_auto_play, (), {
     return globalThis.sgsAutoPlay ? 1 : 0;
 });
+// 【八卦阵】发动方式：页面上"设置"里随时可改，写在这个全局变量里（0/1/2）
+EM_JS(int, js_bagua_mode, (), {
+    return globalThis.sgsBaguaMode | 0;
+});
 
 namespace {
 
@@ -261,9 +265,10 @@ private:
 // ---------------------------------------------------------------- 导出给 JS
 extern "C" {
 
-// 开一局：seed 随机种子；humanSeat 0/1 = 谁来操作，-1 表示全 AI 观战；hp 起始体力
+// 开一局：seed 随机种子；humanSeat 0/1 = 谁来操作，-1 表示全 AI 观战；hp 起始体力；
+//         baguaMode 0=自动 1=每次询问 2=关闭（【八卦阵】发动方式）
 EMSCRIPTEN_KEEPALIVE
-void sgs_start(int seed, int humanSeat, int hp) {
+void sgs_start(int seed, int humanSeat, int hp, int baguaMode) {
     std::string path = locateDeckFile();
     std::vector<CardProto> deck;
     std::string err;
@@ -277,6 +282,13 @@ void sgs_start(int seed, int humanSeat, int hp) {
     g_room->setSilent(true);  // 浏览器里走 log sink，不再往 stdout 刷
     g_room->setLogSink([](const std::string& s) { js_log(s.c_str()); });
     g_room->setMaxTurns(300);
+
+    // 【八卦阵】发动方式：开局值 + 之后随时可从页面"设置"里改（动态读取）
+    g_room->setEightDiagramMode(eightDiagramModeFromInt(baguaMode));
+    g_room->setEightDiagramModeProvider([]() { return js_bagua_mode(); });
+    js_log(str("【八卦阵】发动方式：", eightDiagramModeName(g_room->eightDiagramMode()),
+               "（可在右上角「设置」里随时改）")
+               .c_str());
 
     // 所有卡牌与装备技能
     registerStandardCards(*g_room);

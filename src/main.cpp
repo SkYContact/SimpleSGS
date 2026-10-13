@@ -25,6 +25,7 @@ struct Options {
     int games = 1;         // 自对弈局数
     int maxTurns = 200;    // 防平局死循环
     std::string deck;      // 牌堆数据文件
+    std::string bagua = "auto";  // 【八卦阵】发动方式：auto / ask / off
     bool quiet = false;
 };
 
@@ -38,6 +39,7 @@ void usage() {
         "  --seed <N>      随机种子\n"
         "  --max-turns <N> 单局回合上限（默认 200）\n"
         "  --deck <path>   牌堆 csv 路径\n"
+        "  --bagua <mode>  【八卦阵】发动方式：auto(默认，没手牌闪才判) / ask(每次问我) / off(从不)\n"
         "  --quiet         不打印对局过程（跑批用）\n";
 }
 
@@ -66,6 +68,8 @@ int main(int argc, char** argv) {
             opt.maxTurns = std::atoi(argv[++i]);
         } else if (matchArg(argv[i], "--deck") && i + 1 < argc) {
             opt.deck = argv[++i];
+        } else if (matchArg(argv[i], "--bagua") && i + 1 < argc) {
+            opt.bagua = argv[++i];
         } else if (matchArg(argv[i], "--quiet")) {
             opt.quiet = true;
         } else {
@@ -76,6 +80,12 @@ int main(int argc, char** argv) {
     }
     if (opt.games < 1) opt.games = 1;
     if (opt.hp < 1) opt.hp = 4;
+
+    EightDiagramMode bagua = EightDiagramMode::Auto;
+    if (!parseEightDiagramMode(opt.bagua, bagua)) {
+        std::cout << "无效的 --bagua 取值: " << opt.bagua << "（可选 auto / ask / off）\n";
+        return 1;
+    }
 
     if (opt.deck.empty()) opt.deck = locateDeckFile();
     if (opt.deck.empty()) {
@@ -91,6 +101,7 @@ int main(int argc, char** argv) {
     }
     if (!opt.quiet) {
         std::cout << "牌堆: " << opt.deck << "（" << deck.size() << " 张牌）\n";
+        std::cout << "【八卦阵】发动方式: " << eightDiagramModeName(bagua) << "\n";
         if (opt.human >= 0) {
             std::cout << "你是座位 " << opt.human << "，输入数字选择，0 或 q 表示放弃。\n";
         }
@@ -104,6 +115,7 @@ int main(int argc, char** argv) {
         Room room(deck, opt.seed + static_cast<unsigned>(g) * 7919u);
         room.setSilent(quiet);
         room.setMaxTurns(opt.maxTurns);
+        room.setEightDiagramMode(bagua);
 
         // 卡牌与装备技能都通过事件监听注册（以后加武将技能就是在这里再注册一批）
         registerStandardCards(room);

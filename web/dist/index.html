@@ -33,6 +33,24 @@
         <input id="speed" type="range" min="0" max="1200" step="100" value="260">
         <span id="speedVal">260ms</span>
       </label>
+      <div class="settings-wrap">
+        <button id="settingsBtn" class="btn ghost" title="对局中也能改">⚙ 设置</button>
+        <div class="settings-panel" id="settingsPanel">
+          <h4>设置</h4>
+          <label class="setting-row">
+            <span>【八卦阵】发动</span>
+            <select id="baguaSelect">
+              <option value="0" selected>自动（没手牌【闪】才判定）</option>
+              <option value="1">每次询问我是否发动</option>
+              <option value="2">关闭（只打手牌【闪】）</option>
+            </select>
+          </label>
+          <p class="setting-hint">
+            改动即时生效（下一次需要判定时就用新设置）。<br>
+            判定红色＝视为打出【闪】（省下一张手牌【闪】）；判定失败仍可再打出手牌【闪】。
+          </p>
+        </div>
+      </div>
       <button id="restart" class="btn ghost" disabled>重新开始</button>
     </div>
   </header>
@@ -80,6 +98,7 @@
       <button class="btn tiny" id="reseed" title="换一个随机种子">🎲 换一个</button>
       <span class="hint">刷新/重开都会换新种子；同一种子 = 同样的牌堆顺序</span>
     </div>
+
     <p class="cover-foot" id="loadState">正在加载 wasm…</p>
   </div>
 </div>
