@@ -114,14 +114,23 @@ def run_leg(engine, model_a, model_b, games, seed0, emit_path, seat_a=0):
     return wins_a
 
 
-def farm_leg(engine, model_a, model1, games, seed0, chains=64, banks=2):
-    """农场 W2 双组腿：model_a 坐座位0（cand），model1 坐座位1。返回 (座位0胜, 总局)。"""
-    r = subprocess.run([engine, "--farm", "--model", model_a, "--model1", model1,
-                        "--chains", str(chains), "--games", str(games),
-                        "--seed", str(seed0), "--banks", str(banks), "--quiet"],
-                       check=True, capture_output=True, text=True,
-                       env={**os.environ,
-                            "FARM_CUDA_DIR": "C:/Users/41601/Miniconda3/envs/q35/Lib/site-packages/torch/lib"})
+def farm_leg(engine, model_a, model1, games, seed0, chains=None, banks=2):
+    """农场 W2 双组腿：model_a 坐座位0（cand），model1 坐座位1。返回 (座位0胜, 总局)。
+    底盘=产线判决：fb256 批形 + FIXED_BATCH + 一链一局（chains=games，喂饱批）。"""
+    chains = chains or games   # 一链一局
+    args = [engine, "--farm", "--model", model_a, "--model1", model1,
+            "--slots", "256", "--chains", str(chains), "--games", str(games),
+            "--seed", str(seed0), "--banks", str(banks), "--quiet"]
+    env = {**os.environ,
+           "FARM_FIXED_BATCH": "256",
+           "FARM_CUDA_DIR": "C:/Users/41601/Miniconda3/envs/q35/Lib/site-packages/torch/lib"}
+    r = None
+    for attempt in range(3):   # 框架间歇竞态护栏（约每 12~30 腿一次 0xC0000005）
+        r = subprocess.run(args, capture_output=True, text=True, env=env)
+        if r.returncode == 0:
+            break
+    if r.returncode != 0:
+        raise RuntimeError(f"farm 腿三次崩溃 rc={r.returncode}")
     for line in r.stdout.splitlines():
         if "座位0胜" in line:
             seg = line.split("座位0胜")[1].split()[0]
@@ -134,15 +143,15 @@ def paired_eval(engine, cand, champ, games, seed0, tmp, backend="farm",
                 champ_fb=None, fb_dir=None):
     """双宇宙配对验收。backend=farm: 两个种子块各 games 局（先手位平衡在流内交替）。"""
     if backend == "farm":
-        cand_fb = os.path.join(fb_dir, "cand_eval.fb64.onnx")
-        run_bake(cand, cand_fb, 64)
+        cand_fb = os.path.join(fb_dir, "cand_eval.fb256.onnx")
+        run_bake(cand, cand_fb, 256)
         w = n = 0
-        for i, s0 in enumerate((seed0, seed0 + 7919)):
-            wi, ni = farm_leg(engine, cand_fb, champ_fb, games, s0)
-            w += wi
-            n += ni
+        # 双宇宙 × 座位互换：宇宙1 cand 坐0，宇宙2 champ 坐0（cand 胜 = n-座位0胜）
+        # ——消掉先手 ~60% 的座位偏置，否则验收门被先手优势灌水（g1-g4 教训）
+        w1, n1 = farm_leg(engine, cand_fb, champ_fb, games, seed0)
+        w2, n2 = farm_leg(engine, champ_fb, cand_fb, games, seed0 + 7919)
         os.remove(cand_fb)
-        return w, n
+        return w1 + (n2 - w2), n1 + n2
     wins = 0
     wins += run_leg(engine, cand, champ, games, seed0, tmp + "/a.bcb", seat_a=0)
     wins += run_leg(engine, cand, champ, games, seed0 + 7919, tmp + "/b.bcb", seat_a=1)
@@ -175,7 +184,8 @@ def main():
     if os.path.exists(state_path):
         st = json.load(open(state_path))
         gen = st["gen"]
-        champ_sd = torch.load(st["champ"], map_location="cpu", weights_only=False)["state"]
+        champ_sd = torch.load(os.path.join(args.work, "champ.pt"),
+                              map_location="cpu", weights_only=False)["state"]
         print(f"[resume] gen{gen} champ={st['champ']}")
 
     champ_path = os.path.join(args.work, "champ.onnx")
@@ -218,8 +228,8 @@ def main():
         # ---- 筛选（256×2 配对）----
         champ_fb = None
         if args.backend == "farm":
-            champ_fb = os.path.join(tmp, "champ.fb64.onnx")
-            run_bake(champ_path, champ_fb, 64)
+            champ_fb = os.path.join(tmp, "champ.fb256.onnx")
+            run_bake(champ_path, champ_fb, 256)
         scores = []
         for name, sd, kind in cands:
             p = os.path.join(tmp, f"cand_{name}.onnx")
@@ -243,8 +253,8 @@ def main():
             export_onnx_fast(sd, config, p, tmp)
             champ_fb = None
             if args.backend == "farm":
-                champ_fb = os.path.join(tmp, "champ.fb64.onnx")
-                run_bake(champ_path, champ_fb, 64)
+                champ_fb = os.path.join(tmp, "champ.fb256.onnx")
+                run_bake(champ_path, champ_fb, 256)
             w, n = paired_eval(engine, p, champ_path, CONFIRM_GAMES,
                                SEED0 + 500000 + gen * 1000, tmp, args.backend,
                                champ_fb, tmp)
@@ -267,8 +277,7 @@ def main():
                 break
         if not promoted:
             sigma = min(0.20, sigma * 1.15)  # 未登基抬 σ（1/5 规则反向）
-        json.dump({"gen": gen, "champ": os.path.join(hall, f"g{gen}_last.pt")},
-                  open(state_path, "w"))
+        json.dump({"gen": gen}, open(state_path, "w"))
         torch.save({"state": champ_sd, "config": config},
                    os.path.join(args.work, "champ.pt"))
         say(f"代收尾 耗时{time.time()-t0:.0f}s σ={sigma:.3f} "
