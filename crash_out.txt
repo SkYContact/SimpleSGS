@@ -7,22 +7,21 @@
 [ort] 热身就绪 slots=256，CUDA Graph=开（银行会话：调度台线程绑定）
 [ort-probe] 两图案可分辨=1 复跑稳定=1
 [ort-probe] 两图案可分辨=1 复跑稳定=1
-[bank] 建池 4 家（2 设备组）耗时 394ms（pinned 直写槽+专属批图；组池独立轮转）
+[bank] 建池 4 家（2 设备组）耗时 411ms（pinned 直写槽+专属批图；组池独立轮转）
 [bank] 零拷贝槽位银行就绪: 池 4 家（2 组）× 256 槽，window=0.20ms（游标领号/直写槽/满座或闹钟发车/旗标收割/还池；前缀 h2d+每家一图；组池独立=链→组钉扎；池容量=在飞上限=背压）
-[sgs] 腿起跑: 256 链 256 局（每链 1），backend=cpu（银行制），seed0=914001，fiber 唤醒队列
+[sgs] 腿起跑: 256 链 256 局（每链 1），backend=cpu（银行制），seed0=990001，fiber 唤醒队列
 [sgs] 设备组 0: ort ep=cuda dev=0 ×2 银行 share=1.00 → 128 链
 [sgs] 设备组 1: ort ep=cuda dev=0 ×2 银行 share=1.00 → 128 链
 [fiber] 256 条链已点火（K=16 工人，后端=winfiber，每局一 fiber，链-工人亲和 c%K）
-[bank] srv-lat p50=1.4ms p90=2.0ms rows/batch=256.0 cycle=0.66ms dep=0.50 drain=0.000 gpu_flight=47% waiting=0 self_dep=0 batches=67
-[bank] 批分布: bsz p10/p50/p90=256/256/256（slots=256） flw p50/p90=0.14/0.57ms n=67
-[bank] srv-lat p50=1.4ms p90=2.0ms rows/batch=256.0 cycle=0.60ms dep=0.50 drain=0.000 gpu_flight=55% waiting=0 self_dep=0 batches=62
-[bank] 批分布: bsz p10/p50/p90=256/256/256（slots=256） flw p50/p90=0.18/0.56ms n=62
-[bank] srv-lat p50=1.5ms p90=2.0ms rows/batch=256.0 cycle=0.60ms dep=0.50 drain=0.000 gpu_flight=58% waiting=0 self_dep=0 batches=58
-[bank] 批分布: bsz p10/p50/p90=256/256/256（slots=256） flw p50/p90=0.16/0.59ms n=58
-[bank] srv-lat p50=1.5ms p90=2.0ms rows/batch=256.0 cycle=0.60ms dep=0.50 drain=0.000 gpu_flight=48% waiting=0 self_dep=0 batches=82
-[bank] 批分布: bsz p10/p50/p90=256/256/256（slots=256） flw p50/p90=0.13/0.59ms n=81
-[sgs] 汇总: 先手 146/256, 后手 0/0, 综合 146/256 (57.0%)，决策 0，推理故障局 0
-[sgs] 全链结束: 256 局用时 0.29s（873.52 局/秒）
-[farm] 256 局用时 0.29s（873.5 局/秒）座位0胜 146/256 推理失败 0 决策 0 指纹 081dc687fc365606
-[fbprof-games] n=256 newgame=221µs run=130999µs/局
-[fbprof] n=13797 每决策µs: ask总=158.7 特征=6.2 claim=0.5 行拷=0.4 submit(含挂起)=2279.5 argmax=0.3 | multi循环=158.6
+[bank] srv-lat p50=1.1ms p90=1.6ms rows/batch=256.0 cycle=0.66ms dep=0.52 drain=0.000 gpu_flight=9% waiting=0 self_dep=0 batches=64
+[bank] 批分布: bsz p10/p50/p90=256/256/256（slots=256） flw p50/p90=0.05/0.08ms n=63
+[bank] srv-lat p50=1.2ms p90=1.9ms rows/batch=256.0 cycle=0.62ms dep=0.56 drain=0.000 gpu_flight=10% waiting=0 self_dep=0 batches=55
+[bank] 批分布: bsz p10/p50/p90=256/256/256（slots=256） flw p50/p90=0.05/0.08ms n=55
+[bank] srv-lat p50=1.3ms p90=2.0ms rows/batch=256.0 cycle=0.69ms dep=0.61 drain=0.000 gpu_flight=11% waiting=0 self_dep=0 batches=48
+[bank] 批分布: bsz p10/p50/p90=256/256/256（slots=256） flw p50/p90=0.08/0.11ms n=48
+[bank] srv-lat p50=1.6ms p90=2.6ms rows/batch=256.0 cycle=0.85ms dep=0.70 drain=0.000 gpu_flight=17% waiting=0 self_dep=0 batches=56
+[bank] 批分布: bsz p10/p50/p90=256/256/256（slots=256） flw p50/p90=0.13/0.20ms n=56
+
+[crash] code=0xc0000005 rip=00007FFA7571C524 (mod C:\Windows\SYSTEM32\VCRUNTIME140.dll +0x1c524) rw=0 badaddr=0000026B5041C000 rsp=000000E7372FE918
+[crash] stk[0]=00007FF73BFE8857 sgs_dbg.exe+0x68857
+[crash] stk[6]=00007FF73BFCD216 sgs_dbg.exe+0x4d216

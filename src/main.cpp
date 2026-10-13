@@ -65,6 +65,27 @@ bool matchArg(const char* a, const char* name) { return std::strcmp(a, name) == 
 
 }  // namespace
 
+typedef BOOL (WINAPI* MiniDumpWriteDump_t)(HANDLE, DWORD, HANDLE, int, void*, void*, void*);
+static void writeMinidump(EXCEPTION_POINTERS* ep) {
+    HMODULE dh = LoadLibraryA("dbghelp.dll");
+    if (!dh) return;
+    auto fn = (MiniDumpWriteDump_t)GetProcAddress(dh, "MiniDumpWriteDump");
+    if (!fn) return;
+    char path[260] = "sgs_crash.dmp";
+    if (const char* d = getenv("SGS_DMP_DIR")) { strncpy(path, d, 200); strcat(path, "\sgs_crash.dmp"); }
+    HANDLE f = CreateFileA(path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
+    if (f == INVALID_HANDLE_VALUE) return;
+    // MINIDUMP_EXCEPTION_INFORMATION 手摊（避免拉入 mdminwi 头）
+    struct MEI { unsigned long ThreadId; void* ExceptionPointers; int ClientPointers; };
+    EXCEPTION_POINTERS epv = *ep;
+    MEI mei = { GetCurrentThreadId(), &epv, 0 };
+    BOOL okd = fn(GetCurrentProcess(), GetCurrentProcessId(), f, 0 /*MiniDumpNormal*/,
+       &mei, nullptr, nullptr);
+    fprintf(stderr, "[dmp] write=%d gle=%lu path=%s
+", (int)okd, GetLastError(), path);
+    CloseHandle(f);
+}
+
 static LONG WINAPI crashHandler(EXCEPTION_POINTERS* ep) {
     void* rip = (void*)ep->ContextRecord->Rip;
     HMODULE mod = nullptr;
@@ -72,9 +93,32 @@ static LONG WINAPI crashHandler(EXCEPTION_POINTERS* ep) {
     GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, (LPCSTR)rip, &mod);
     uintptr_t off = mod ? (uintptr_t)rip - (uintptr_t)mod : 0;
     if (mod) GetModuleFileNameA(mod, base, 260);
-    fprintf(stderr, "\n[crash] code=0x%lx rip=%p (mod %s +0x%zx)\n",
-            (unsigned long)ep->ExceptionRecord->ExceptionCode, rip, base, (size_t)off);
+    fprintf(stderr, "\n[crash] code=0x%lx rip=%p (mod %s +0x%zx) rw=%llu badaddr=%p rsp=%p\n",
+            (unsigned long)ep->ExceptionRecord->ExceptionCode, rip, base, (size_t)off,
+            (unsigned long long)ep->ExceptionRecord->ExceptionInformation[0],
+            (void*)ep->ExceptionRecord->ExceptionInformation[1],
+            (void*)ep->ContextRecord->Rsp);
+    // 栈顶返回地址链：定位 memcpy 类崩溃的真正调用方
+    unsigned long long rsp = ep->ContextRecord->Rsp;
+    for (int fi = 0; fi < 8; ++fi) {
+        unsigned long long ra = 0;
+        __try { ra = *(unsigned long long*)(rsp + fi * 8); }
+        __except (1) { break; }
+        HMODULE m2 = nullptr;
+        char b2[260] = {0};
+        if (ra > 0x10000 && GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                                               GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                               (LPCSTR)ra, &m2)) {
+            char n2[260] = {0};
+            GetModuleFileNameA(m2, n2, 260);
+            char* nb = n2;
+            for (char* q = n2; *q; ++q) if (*q == 92 || *q == '/') nb = q + 1;
+            fprintf(stderr, "[crash] stk[%d]=%p %s+0x%zx\n", fi, (void*)ra, nb,
+                    (size_t)(ra - (unsigned long long)m2));
+        }
+    }
     fflush(stderr);
+    writeMinidump(ep);
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
