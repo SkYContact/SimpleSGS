@@ -3,7 +3,6 @@
 window.SgsMotion = (() => {
   const flights = new Set();
   const $ = id => document.getElementById(id);
-  const enabled = () => !$('motionSetting').checked && window.sgsSpeedMs > 0;
   function rect(el) {
     const r = el?.getBoundingClientRect();
     return r?.width && r.height ? r : null;
@@ -39,7 +38,7 @@ window.SgsMotion = (() => {
     return finished;
   }
   function fly(card, from, to, { landing = null, delay = 0 } = {}) {
-    if (!enabled() || !from || !to || !Element.prototype.animate) return;
+    if (!from || !to || !Element.prototype.animate) return;
     const layer = $('motionLayer');
     const ghost = document.createElement('div');
     const width = innerWidth < 761 ? 64 : 90, height = width * 1.48;
@@ -72,7 +71,7 @@ window.SgsMotion = (() => {
   }
   function judge(card, landing) {
     const at = rect(landing);
-    if (!enabled() || !at || !Element.prototype.animate) return Promise.resolve();
+    if (!at || !Element.prototype.animate) return Promise.resolve();
     const ghost = document.createElement('div');
     ghost.className = 'judgment-card';
     ghost.style.cssText = `left:${at.x}px;top:${at.y}px;--card-w:${at.width}px`;
@@ -88,7 +87,7 @@ window.SgsMotion = (() => {
   function targets(source, who, targetIds, bottom) {
     const ids = [...new Set(targetIds)];
     const start = rect(source);
-    if (!enabled() || !start || !ids.some(id => id !== who) || !Element.prototype.animate) return;
+    if (!start || !ids.some(id => id !== who) || !Element.prototype.animate) return;
     const ns = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(ns, 'svg');
     svg.classList.add('target-lines');
@@ -125,5 +124,5 @@ window.SgsMotion = (() => {
     });
     flights.clear();
   }
-  return { enabled, capture, region, fly, draw, reveal, judge, targets, clear };
+  return { capture, region, fly, draw, reveal, judge, targets, clear };
 })();

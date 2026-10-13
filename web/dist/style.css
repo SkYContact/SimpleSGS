@@ -160,7 +160,6 @@ h2 { font-size: 20px; margin: 0; font-weight: 500; }
 .menu-links { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 26px; }
 .setting { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin: 18px 0; font-size: 14px; }
 select, input[type=number] { background: #0c171c; color: var(--text); border: 1px solid #d0c2a944; border-radius: 3px; padding: 10px 8px; max-width: 210px; min-width: 0; }
-.check-setting { display: flex; gap: 10px; align-items: center; font-size: 14px; margin: 18px 0; }
 input[type=checkbox],input[type=radio] { accent-color: var(--paper); }
 .replay-settings { margin: 28px 0 0; border-top: 1px solid var(--line); padding-top: 18px; color: #d6d0c5; font-size: 13px; }
 .replay-settings summary { cursor: pointer; }
@@ -193,7 +192,6 @@ input[type=checkbox],input[type=radio] { accent-color: var(--paper); }
 #resultSummary { color: var(--muted); font-size: 14px; margin-bottom: 28px; }
 .result-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
-.reduce-motion *, .reduce-motion *::before, .reduce-motion *::after { animation: none !important; transition: none !important; }
 @media (max-width:1100px) {
   :root { --card-w: 116px; }
   .self { left: 22px; gap: 8px; }
